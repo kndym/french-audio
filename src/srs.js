@@ -41,9 +41,11 @@ export function processReview(progress, cardId, rating, learningSteps = LEARNING
 
   if (p.state === STATE.NEW || p.state === STATE.LEARNING || p.state === STATE.RELEARNING) {
     if (rating === 'again') {
+      p.state = STATE.LEARNING;
       p.step = 0;
       p.nextReview = Date.now() + steps[0] * 60 * 1000;
     } else if (rating === 'hard') {
+      p.state = STATE.LEARNING;
       const idx = Math.min(p.step, steps.length - 1);
       const mins = steps[idx] > 0 ? steps[idx] : 1;
       p.nextReview = Date.now() + mins * 60 * 1000;
@@ -55,6 +57,7 @@ export function processReview(progress, cardId, rating, learningSteps = LEARNING
         p.reps = 1;
         p.nextReview = Date.now() + GRADUATING_INTERVAL * 24 * 60 * 60 * 1000;
       } else {
+        p.state = STATE.LEARNING;
         p.nextReview = Date.now() + steps[p.step] * 60 * 1000;
       }
     } else if (rating === 'easy') {
