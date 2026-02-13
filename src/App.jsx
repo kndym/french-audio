@@ -292,7 +292,7 @@ export default function App() {
       </header>
 
       {current ? (
-        <CardView card={current} progress={progress} onRating={handleRating} />
+        <CardView key={current.id} card={current} progress={progress} onRating={handleRating} />
       ) : (
         <div
           style={{
