@@ -88,9 +88,13 @@ function CardView({ card, progress, onRating }) {
   const [transcript, setTranscript] = useState(null);
   const prompt = card.prompts[promptIndex];
 
+  const isNewFormat = typeof prompt === 'object' && prompt.sentence && prompt.hint;
+  const displayPrompt = isNewFormat ? prompt : { sentence: prompt, hint: null, acceptedAnswers: card.acceptedAnswers || [card.french] };
+  const acceptedAnswers = isNewFormat ? prompt.acceptedAnswers : (card.acceptedAnswers || [card.french]);
+
   const handleResult = useCallback((text) => setTranscript(text), []);
 
-  const isCorrect = transcript !== null && matchesAnswer(transcript, card.acceptedAnswers);
+  const isCorrect = transcript !== null && matchesAnswer(transcript, acceptedAnswers);
 
   return (
     <div
@@ -110,18 +114,43 @@ function CardView({ card, progress, onRating }) {
           marginBottom: '0.5rem',
         }}
       >
-        English prompt
+        {isNewFormat ? 'Fill in the blank' : 'English prompt'}
       </p>
       <p
         style={{
           fontSize: '1.5rem',
           fontWeight: 600,
-          marginBottom: '1.5rem',
+          marginBottom: displayPrompt.hint ? '0.25rem' : '1.5rem',
           lineHeight: 1.4,
         }}
       >
-        "{prompt}"
+        {displayPrompt.sentence.includes('___') ? (
+          <>
+            {displayPrompt.sentence.split('___').map((part, i, arr) => (
+              <span key={i}>
+                {part}
+                {i < arr.length - 1 && (
+                  <span style={{ textDecoration: 'underline', textDecorationStyle: 'dashed', opacity: 0.9 }}>___</span>
+                )}
+              </span>
+            ))}
+          </>
+        ) : (
+          `"${displayPrompt.sentence}"`
+        )}
       </p>
+      {displayPrompt.hint && (
+        <p
+          style={{
+            fontSize: '1rem',
+            color: 'var(--text-muted)',
+            marginBottom: '1.5rem',
+            fontStyle: 'italic',
+          }}
+        >
+          [{displayPrompt.hint}]
+        </p>
+      )}
 
       {transcript === null ? (
         <RecordButton onResult={handleResult} />
@@ -138,20 +167,11 @@ function CardView({ card, progress, onRating }) {
               Accepted
             </p>
             <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>
-              {card.acceptedAnswers.slice(0, 8).join(', ')}
-              {card.acceptedAnswers.length > 8 ? '...' : ''}
+              {acceptedAnswers.length > 2
+                ? `${card.french} (inf.) · ${acceptedAnswers.slice(0, 10).join(', ')}${acceptedAnswers.length > 10 ? '...' : ''}`
+                : acceptedAnswers.join(', ')}
             </p>
           </div>
-          <p
-            style={{
-              fontSize: '1rem',
-              fontWeight: 600,
-              color: 'var(--success)',
-              marginTop: '0.5rem',
-            }}
-          >
-            {card.french}
-          </p>
           <div
             style={{
               display: 'grid',
