@@ -1,0 +1,4 @@
+{
+  "buildCommand": "npm run build-deck && npm run build",
+  "outputDirectory": "dist"
+}

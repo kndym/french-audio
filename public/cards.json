@@ -1,0 +1,1602 @@
+[
+  {
+    "id": "card-1",
+    "french": "être",
+    "rank": 1,
+    "prompts": [
+      "I am tired",
+      "You are French",
+      "We are here",
+      "They are happy",
+      "He is at home"
+    ],
+    "acceptedAnswers": [
+      "être",
+      "suis",
+      "es",
+      "est",
+      "sommes",
+      "êtes",
+      "sont",
+      "été",
+      "étais",
+      "était",
+      "étaient",
+      "serai",
+      "sera",
+      "soit",
+      "sois",
+      "soyons",
+      "soyez"
+    ]
+  },
+  {
+    "id": "card-2",
+    "french": "je",
+    "rank": 2,
+    "prompts": [
+      "I am ready",
+      "I want to go",
+      "I don't know"
+    ],
+    "acceptedAnswers": [
+      "je",
+      "je"
+    ]
+  },
+  {
+    "id": "card-3",
+    "french": "de",
+    "rank": 3,
+    "prompts": [
+      "a piece of cake",
+      "from Paris",
+      "the house of my friend"
+    ],
+    "acceptedAnswers": [
+      "de",
+      "de"
+    ]
+  },
+  {
+    "id": "card-4",
+    "french": "ne",
+    "rank": 4,
+    "prompts": [
+      "I don't understand",
+      "She doesn't want to"
+    ],
+    "acceptedAnswers": [
+      "ne",
+      "ne"
+    ]
+  },
+  {
+    "id": "card-5",
+    "french": "avoir",
+    "rank": 5,
+    "prompts": [
+      "I have a dog",
+      "She has time",
+      "Do you have a pen?"
+    ],
+    "acceptedAnswers": [
+      "avoir",
+      "ai",
+      "as",
+      "a",
+      "avons",
+      "avez",
+      "ont",
+      "eu",
+      "avais",
+      "avait",
+      "avions",
+      "aviez",
+      "avaient",
+      "aurai",
+      "aura",
+      "ait",
+      "aie",
+      "ayons",
+      "ayez"
+    ]
+  },
+  {
+    "id": "card-6",
+    "french": "pas",
+    "rank": 6,
+    "prompts": [
+      "Not yet",
+      "No problem",
+      "I don't know"
+    ],
+    "acceptedAnswers": [
+      "pas",
+      "pas"
+    ]
+  },
+  {
+    "id": "card-7",
+    "french": "la",
+    "rank": 7,
+    "prompts": [
+      "the woman",
+      "the house",
+      "the door"
+    ],
+    "acceptedAnswers": [
+      "la",
+      "la"
+    ]
+  },
+  {
+    "id": "card-8",
+    "french": "tu",
+    "rank": 8,
+    "prompts": [
+      "You are nice",
+      "Do you want some coffee?"
+    ],
+    "acceptedAnswers": [
+      "tu",
+      "tu"
+    ]
+  },
+  {
+    "id": "card-9",
+    "french": "le",
+    "rank": 9,
+    "prompts": [
+      "the man",
+      "the book",
+      "the car"
+    ],
+    "acceptedAnswers": [
+      "le",
+      "le"
+    ]
+  },
+  {
+    "id": "card-10",
+    "french": "vous",
+    "rank": 10,
+    "prompts": [
+      "You are welcome",
+      "Do you speak French?"
+    ],
+    "acceptedAnswers": [
+      "vous",
+      "vous"
+    ]
+  },
+  {
+    "id": "card-11",
+    "french": "il",
+    "rank": 11,
+    "prompts": [
+      "He is here",
+      "It is raining"
+    ],
+    "acceptedAnswers": [
+      "il",
+      "il"
+    ]
+  },
+  {
+    "id": "card-12",
+    "french": "et",
+    "rank": 12,
+    "prompts": [
+      "bread and butter",
+      "you and me"
+    ],
+    "acceptedAnswers": [
+      "et",
+      "et"
+    ]
+  },
+  {
+    "id": "card-13",
+    "french": "à",
+    "rank": 13,
+    "prompts": [
+      "at home",
+      "to Paris",
+      "at 5 o'clock"
+    ],
+    "acceptedAnswers": [
+      "à",
+      "à"
+    ]
+  },
+  {
+    "id": "card-14",
+    "french": "un",
+    "rank": 14,
+    "prompts": [
+      "a book",
+      "one day",
+      "an apple"
+    ],
+    "acceptedAnswers": [
+      "un",
+      "un"
+    ]
+  },
+  {
+    "id": "card-15",
+    "french": "aller",
+    "rank": 15,
+    "prompts": [
+      "I'm going home",
+      "We're going to leave",
+      "Where are you going?"
+    ],
+    "acceptedAnswers": [
+      "aller",
+      "vais",
+      "vas",
+      "va",
+      "allons",
+      "allez",
+      "vont",
+      "allé",
+      "allait",
+      "irai",
+      "ira",
+      "aille",
+      "ailles",
+      "aille"
+    ]
+  },
+  {
+    "id": "card-16",
+    "french": "ça",
+    "rank": 16,
+    "prompts": [
+      "That's good",
+      "How's it going?",
+      "That's it"
+    ],
+    "acceptedAnswers": [
+      "ça",
+      "ça"
+    ]
+  },
+  {
+    "id": "card-17",
+    "french": "faire",
+    "rank": 17,
+    "prompts": [
+      "I'm doing homework",
+      "What are you doing?",
+      "We're making dinner"
+    ],
+    "acceptedAnswers": [
+      "faire",
+      "fais",
+      "fait",
+      "faisons",
+      "faites",
+      "font",
+      "fait",
+      "faisait",
+      "ferai",
+      "fera",
+      "fasse",
+      "fasses"
+    ]
+  },
+  {
+    "id": "card-18",
+    "french": "les",
+    "rank": 18,
+    "prompts": [
+      "the children",
+      "the books",
+      "the apples"
+    ],
+    "acceptedAnswers": [
+      "les",
+      "les"
+    ]
+  },
+  {
+    "id": "card-19",
+    "french": "on",
+    "rank": 19,
+    "prompts": [
+      "We are going",
+      "One must try",
+      "We'll see"
+    ],
+    "acceptedAnswers": [
+      "on",
+      "on"
+    ]
+  },
+  {
+    "id": "card-20",
+    "french": "l'",
+    "rank": 20,
+    "prompts": [
+      "the airplane",
+      "the hour",
+      "the friend"
+    ],
+    "acceptedAnswers": [
+      "l'",
+      "l'"
+    ]
+  },
+  {
+    "id": "card-21",
+    "french": "une",
+    "rank": 21,
+    "prompts": [
+      "a house",
+      "an idea",
+      "one day"
+    ],
+    "acceptedAnswers": [
+      "une",
+      "une"
+    ]
+  },
+  {
+    "id": "card-22",
+    "french": "d'",
+    "rank": 22,
+    "prompts": [
+      "a lot of",
+      "from here",
+      "some water"
+    ],
+    "acceptedAnswers": [
+      "d'",
+      "d'"
+    ]
+  },
+  {
+    "id": "card-23",
+    "french": "pour",
+    "rank": 23,
+    "prompts": [
+      "for you",
+      "in order to",
+      "for dessert"
+    ],
+    "acceptedAnswers": [
+      "pour",
+      "pour"
+    ]
+  },
+  {
+    "id": "card-24",
+    "french": "des",
+    "rank": 24,
+    "prompts": [
+      "some books",
+      "of the",
+      "some friends"
+    ],
+    "acceptedAnswers": [
+      "des",
+      "des"
+    ]
+  },
+  {
+    "id": "card-25",
+    "french": "dire",
+    "rank": 25,
+    "prompts": [
+      "to say",
+      "What did you say?",
+      "They say that"
+    ],
+    "acceptedAnswers": [
+      "dire",
+      "dis",
+      "dit",
+      "disons",
+      "dites",
+      "disent",
+      "disait",
+      "dira",
+      "dise",
+      "dises"
+    ]
+  },
+  {
+    "id": "card-26",
+    "french": "en",
+    "rank": 26,
+    "prompts": [
+      "in French",
+      "in 2024",
+      "by train"
+    ],
+    "acceptedAnswers": [
+      "en",
+      "en"
+    ]
+  },
+  {
+    "id": "card-27",
+    "french": "pouvoir",
+    "rank": 27,
+    "prompts": [
+      "I can help",
+      "Can you come?",
+      "We couldn't"
+    ],
+    "acceptedAnswers": [
+      "pouvoir",
+      "peux",
+      "peut",
+      "pouvons",
+      "pouvez",
+      "peuvent",
+      "pu",
+      "pouvait",
+      "pourra",
+      "puisse",
+      "puisses"
+    ]
+  },
+  {
+    "id": "card-28",
+    "french": "qui",
+    "rank": 28,
+    "prompts": [
+      "who is that?",
+      "the man who",
+      "which one?"
+    ],
+    "acceptedAnswers": [
+      "qui",
+      "qui"
+    ]
+  },
+  {
+    "id": "card-29",
+    "french": "vouloir",
+    "rank": 29,
+    "prompts": [
+      "I want coffee",
+      "Do you want to come?",
+      "They want to leave"
+    ],
+    "acceptedAnswers": [
+      "vouloir",
+      "veux",
+      "veut",
+      "voulons",
+      "voulez",
+      "veulent",
+      "voulu",
+      "voulait",
+      "voudra",
+      "veuille",
+      "veuilles"
+    ]
+  },
+  {
+    "id": "card-30",
+    "french": "ce",
+    "rank": 30,
+    "prompts": [
+      "this book",
+      "that man",
+      "what's this?"
+    ],
+    "acceptedAnswers": [
+      "ce",
+      "ce"
+    ]
+  },
+  {
+    "id": "card-31",
+    "french": "mais",
+    "rank": 31,
+    "prompts": [
+      "but I don't know",
+      "yes but",
+      "however"
+    ],
+    "acceptedAnswers": [
+      "mais",
+      "mais"
+    ]
+  },
+  {
+    "id": "card-32",
+    "french": "me",
+    "rank": 32,
+    "prompts": [
+      "Give me",
+      "Tell me",
+      "He told me"
+    ],
+    "acceptedAnswers": [
+      "me",
+      "me"
+    ]
+  },
+  {
+    "id": "card-33",
+    "french": "nous",
+    "rank": 33,
+    "prompts": [
+      "We are leaving",
+      "Give us",
+      "between us"
+    ],
+    "acceptedAnswers": [
+      "nous",
+      "nous"
+    ]
+  },
+  {
+    "id": "card-34",
+    "french": "dans",
+    "rank": 34,
+    "prompts": [
+      "in the house",
+      "in 5 minutes",
+      "in Paris"
+    ],
+    "acceptedAnswers": [
+      "dans",
+      "dans"
+    ]
+  },
+  {
+    "id": "card-35",
+    "french": "elle",
+    "rank": 35,
+    "prompts": [
+      "She is beautiful",
+      "It is ready"
+    ],
+    "acceptedAnswers": [
+      "elle",
+      "elle"
+    ]
+  },
+  {
+    "id": "card-36",
+    "french": "savoir",
+    "rank": 36,
+    "prompts": [
+      "I know",
+      "Do you know?",
+      "We need to know"
+    ],
+    "acceptedAnswers": [
+      "savoir",
+      "sais",
+      "sait",
+      "savons",
+      "savez",
+      "savent",
+      "su",
+      "savait",
+      "saura",
+      "sache",
+      "saches"
+    ]
+  },
+  {
+    "id": "card-37",
+    "french": "du",
+    "rank": 37,
+    "prompts": [
+      "some bread",
+      "of the",
+      "from the"
+    ],
+    "acceptedAnswers": [
+      "du",
+      "du"
+    ]
+  },
+  {
+    "id": "card-38",
+    "french": "y",
+    "rank": 38,
+    "prompts": [
+      "I'm going there",
+      "there is",
+      "are you there?"
+    ],
+    "acceptedAnswers": [
+      "y",
+      "y"
+    ]
+  },
+  {
+    "id": "card-39",
+    "french": "t'",
+    "rank": 39,
+    "prompts": [
+      "I love you",
+      "I told you"
+    ],
+    "acceptedAnswers": [
+      "t'",
+      "t'"
+    ]
+  },
+  {
+    "id": "card-40",
+    "french": "bien",
+    "rank": 40,
+    "prompts": [
+      "very well",
+      "that's good",
+      "well done"
+    ],
+    "acceptedAnswers": [
+      "bien",
+      "bien"
+    ]
+  },
+  {
+    "id": "card-41",
+    "french": "voir",
+    "rank": 41,
+    "prompts": [
+      "I want to see",
+      "Let me see",
+      "We'll see"
+    ],
+    "acceptedAnswers": [
+      "voir",
+      "vois",
+      "voit",
+      "voyons",
+      "voyez",
+      "voient",
+      "vu",
+      "voyait",
+      "verra",
+      "voie",
+      "voies"
+    ]
+  },
+  {
+    "id": "card-42",
+    "french": "que",
+    "rank": 42,
+    "prompts": [
+      "that",
+      "what",
+      "than"
+    ],
+    "acceptedAnswers": [
+      "que",
+      "que"
+    ]
+  },
+  {
+    "id": "card-43",
+    "french": "plus",
+    "rank": 43,
+    "prompts": [
+      "more",
+      "no more",
+      "anymore"
+    ],
+    "acceptedAnswers": [
+      "plus",
+      "plus"
+    ]
+  },
+  {
+    "id": "card-44",
+    "french": "non",
+    "rank": 44,
+    "prompts": [
+      "no",
+      "not at all"
+    ],
+    "acceptedAnswers": [
+      "non",
+      "non"
+    ]
+  },
+  {
+    "id": "card-45",
+    "french": "te",
+    "rank": 45,
+    "prompts": [
+      "I love you",
+      "I told you"
+    ],
+    "acceptedAnswers": [
+      "te",
+      "te"
+    ]
+  },
+  {
+    "id": "card-46",
+    "french": "mon",
+    "rank": 46,
+    "prompts": [
+      "my house",
+      "my friend",
+      "my book"
+    ],
+    "acceptedAnswers": [
+      "mon",
+      "mon"
+    ]
+  },
+  {
+    "id": "card-47",
+    "french": "au",
+    "rank": 47,
+    "prompts": [
+      "at the",
+      "to the",
+      "at home"
+    ],
+    "acceptedAnswers": [
+      "au",
+      "au"
+    ]
+  },
+  {
+    "id": "card-48",
+    "french": "avec",
+    "rank": 48,
+    "prompts": [
+      "with me",
+      "with sugar",
+      "together"
+    ],
+    "acceptedAnswers": [
+      "avec",
+      "avec"
+    ]
+  },
+  {
+    "id": "card-49",
+    "french": "moi",
+    "rank": 49,
+    "prompts": [
+      "me",
+      "for me",
+      "with me"
+    ],
+    "acceptedAnswers": [
+      "moi",
+      "moi"
+    ]
+  },
+  {
+    "id": "card-50",
+    "french": "devoir",
+    "rank": 50,
+    "prompts": [
+      "I have to go",
+      "We must try",
+      "You should rest"
+    ],
+    "acceptedAnswers": [
+      "devoir",
+      "dois",
+      "doit",
+      "devons",
+      "devez",
+      "doivent",
+      "dû",
+      "devait",
+      "devra",
+      "doive",
+      "doives"
+    ]
+  },
+  {
+    "id": "card-51",
+    "french": "oui",
+    "rank": 51,
+    "prompts": [
+      "yes",
+      "yeah"
+    ],
+    "acceptedAnswers": [
+      "oui",
+      "oui"
+    ]
+  },
+  {
+    "id": "card-52",
+    "french": "ils",
+    "rank": 52,
+    "prompts": [
+      "They are here",
+      "They want to leave"
+    ],
+    "acceptedAnswers": [
+      "ils",
+      "ils"
+    ]
+  },
+  {
+    "id": "card-53",
+    "french": "tout",
+    "rank": 53,
+    "prompts": [
+      "everything",
+      "all",
+      "very"
+    ],
+    "acceptedAnswers": [
+      "tout",
+      "tout"
+    ]
+  },
+  {
+    "id": "card-54",
+    "french": "se",
+    "rank": 54,
+    "prompts": [
+      "each other",
+      "himself",
+      "herself"
+    ],
+    "acceptedAnswers": [
+      "se",
+      "se"
+    ]
+  },
+  {
+    "id": "card-55",
+    "french": "venir",
+    "rank": 55,
+    "prompts": [
+      "to come",
+      "Come here!",
+      "He is coming"
+    ],
+    "acceptedAnswers": [
+      "venir",
+      "viens",
+      "vient",
+      "venons",
+      "venez",
+      "viennent",
+      "venu",
+      "venait",
+      "viendra",
+      "vienne",
+      "viennes"
+    ]
+  },
+  {
+    "id": "card-56",
+    "french": "sur",
+    "rank": 56,
+    "prompts": [
+      "on the table",
+      "about",
+      "over"
+    ],
+    "acceptedAnswers": [
+      "sur",
+      "sur"
+    ]
+  },
+  {
+    "id": "card-57",
+    "french": "toi",
+    "rank": 57,
+    "prompts": [
+      "you",
+      "for you"
+    ],
+    "acceptedAnswers": [
+      "toi",
+      "toi"
+    ]
+  },
+  {
+    "id": "card-58",
+    "french": "s'",
+    "rank": 58,
+    "prompts": [
+      "himself",
+      "herself",
+      "each other"
+    ],
+    "acceptedAnswers": [
+      "s'",
+      "s'"
+    ]
+  },
+  {
+    "id": "card-59",
+    "french": "ici",
+    "rank": 59,
+    "prompts": [
+      "here",
+      "over here",
+      "right here"
+    ],
+    "acceptedAnswers": [
+      "ici",
+      "ici"
+    ]
+  },
+  {
+    "id": "card-60",
+    "french": "rien",
+    "rank": 60,
+    "prompts": [
+      "nothing",
+      "not anything",
+      "nothing at all"
+    ],
+    "acceptedAnswers": [
+      "rien",
+      "rien"
+    ]
+  },
+  {
+    "id": "card-61",
+    "french": "ma",
+    "rank": 61,
+    "prompts": [
+      "my house",
+      "my friend"
+    ],
+    "acceptedAnswers": [
+      "ma",
+      "ma"
+    ]
+  },
+  {
+    "id": "card-62",
+    "french": "comme",
+    "rank": 62,
+    "prompts": [
+      "like",
+      "as",
+      "such as"
+    ],
+    "acceptedAnswers": [
+      "comme",
+      "comme"
+    ]
+  },
+  {
+    "id": "card-63",
+    "french": "lui",
+    "rank": 63,
+    "prompts": [
+      "him",
+      "to him",
+      "for him"
+    ],
+    "acceptedAnswers": [
+      "lui",
+      "lui"
+    ]
+  },
+  {
+    "id": "card-64",
+    "french": "où",
+    "rank": 64,
+    "prompts": [
+      "where",
+      "when",
+      "wherein"
+    ],
+    "acceptedAnswers": [
+      "où",
+      "où"
+    ]
+  },
+  {
+    "id": "card-65",
+    "french": "si",
+    "rank": 65,
+    "prompts": [
+      "if",
+      "yes",
+      "so"
+    ],
+    "acceptedAnswers": [
+      "si",
+      "si"
+    ]
+  },
+  {
+    "id": "card-66",
+    "french": "là",
+    "rank": 66,
+    "prompts": [
+      "there",
+      "here",
+      "over there"
+    ],
+    "acceptedAnswers": [
+      "là",
+      "là"
+    ]
+  },
+  {
+    "id": "card-67",
+    "french": "suivre",
+    "rank": 67,
+    "prompts": [
+      "to follow",
+      "Follow me",
+      "I'm following"
+    ],
+    "acceptedAnswers": [
+      "suivre",
+      "suis",
+      "suit",
+      "suivons",
+      "suivez",
+      "suivent",
+      "suivi",
+      "suivait",
+      "suira"
+    ]
+  },
+  {
+    "id": "card-68",
+    "french": "parler",
+    "rank": 68,
+    "prompts": [
+      "to speak",
+      "I speak French",
+      "We need to talk"
+    ],
+    "acceptedAnswers": [
+      "parler",
+      "parle",
+      "parles",
+      "parlons",
+      "parlez",
+      "parlent",
+      "parlé",
+      "parlait",
+      "parlera"
+    ]
+  },
+  {
+    "id": "card-69",
+    "french": "prendre",
+    "rank": 69,
+    "prompts": [
+      "to take",
+      "Take it",
+      "I'll take it"
+    ],
+    "acceptedAnswers": [
+      "prendre",
+      "prends",
+      "prend",
+      "prenons",
+      "prenez",
+      "prennent",
+      "pris",
+      "prenait",
+      "prendra",
+      "prenne",
+      "prennes"
+    ]
+  },
+  {
+    "id": "card-70",
+    "french": "cette",
+    "rank": 70,
+    "prompts": [
+      "this woman",
+      "this time",
+      "this one"
+    ],
+    "acceptedAnswers": [
+      "cette",
+      "cette"
+    ]
+  },
+  {
+    "id": "card-71",
+    "french": "votre",
+    "rank": 71,
+    "prompts": [
+      "your house",
+      "your book",
+      "your friend"
+    ],
+    "acceptedAnswers": [
+      "votre",
+      "votre"
+    ]
+  },
+  {
+    "id": "card-72",
+    "french": "quand",
+    "rank": 72,
+    "prompts": [
+      "when",
+      "whenever"
+    ],
+    "acceptedAnswers": [
+      "quand",
+      "quand"
+    ]
+  },
+  {
+    "id": "card-73",
+    "french": "alors",
+    "rank": 73,
+    "prompts": [
+      "so",
+      "then",
+      "well then"
+    ],
+    "acceptedAnswers": [
+      "alors",
+      "alors"
+    ]
+  },
+  {
+    "id": "card-74",
+    "french": "chose",
+    "rank": 74,
+    "prompts": [
+      "a thing",
+      "something",
+      "nothing"
+    ],
+    "acceptedAnswers": [
+      "chose",
+      "chose"
+    ]
+  },
+  {
+    "id": "card-75",
+    "french": "par",
+    "rank": 75,
+    "prompts": [
+      "by",
+      "through",
+      "per"
+    ],
+    "acceptedAnswers": [
+      "par",
+      "par"
+    ]
+  },
+  {
+    "id": "card-76",
+    "french": "son",
+    "rank": 76,
+    "prompts": [
+      "his/her book",
+      "his/her house",
+      "its"
+    ],
+    "acceptedAnswers": [
+      "son",
+      "son"
+    ]
+  },
+  {
+    "id": "card-77",
+    "french": "ton",
+    "rank": 77,
+    "prompts": [
+      "your book",
+      "your house"
+    ],
+    "acceptedAnswers": [
+      "ton",
+      "ton"
+    ]
+  },
+  {
+    "id": "card-78",
+    "french": "croire",
+    "rank": 78,
+    "prompts": [
+      "to believe",
+      "I believe you",
+      "We believe"
+    ],
+    "acceptedAnswers": [
+      "croire",
+      "crois",
+      "croit",
+      "croyons",
+      "croyez",
+      "croient",
+      "cru",
+      "croyait",
+      "croira",
+      "croie",
+      "croies"
+    ]
+  },
+  {
+    "id": "card-79",
+    "french": "aimer",
+    "rank": 79,
+    "prompts": [
+      "to like",
+      "I like it",
+      "I love you"
+    ],
+    "acceptedAnswers": [
+      "aimer",
+      "aime",
+      "aimes",
+      "aimons",
+      "aimez",
+      "aiment",
+      "aimé",
+      "aimait",
+      "aimera"
+    ]
+  },
+  {
+    "id": "card-80",
+    "french": "falloir",
+    "rank": 80,
+    "prompts": [
+      "it is necessary",
+      "we must",
+      "one must"
+    ],
+    "acceptedAnswers": [
+      "falloir",
+      "faut",
+      "fallu",
+      "faudra",
+      "faudrait"
+    ]
+  },
+  {
+    "id": "card-81",
+    "french": "très",
+    "rank": 81,
+    "prompts": [
+      "very",
+      "really",
+      "extremely"
+    ],
+    "acceptedAnswers": [
+      "très",
+      "très"
+    ]
+  },
+  {
+    "id": "card-82",
+    "french": "ou",
+    "rank": 82,
+    "prompts": [
+      "or",
+      "either or"
+    ],
+    "acceptedAnswers": [
+      "ou",
+      "ou"
+    ]
+  },
+  {
+    "id": "card-83",
+    "french": "quoi",
+    "rank": 83,
+    "prompts": [
+      "what",
+      "what's that?"
+    ],
+    "acceptedAnswers": [
+      "quoi",
+      "quoi"
+    ]
+  },
+  {
+    "id": "card-84",
+    "french": "bon",
+    "rank": 84,
+    "prompts": [
+      "good",
+      "okay",
+      "well"
+    ],
+    "acceptedAnswers": [
+      "bon",
+      "bon"
+    ]
+  },
+  {
+    "id": "card-85",
+    "french": "passer",
+    "rank": 85,
+    "prompts": [
+      "to pass",
+      "to spend time",
+      "Come in"
+    ],
+    "acceptedAnswers": [
+      "passer",
+      "passe",
+      "passes",
+      "passons",
+      "passez",
+      "passent",
+      "passé",
+      "passait",
+      "passera"
+    ]
+  },
+  {
+    "id": "card-86",
+    "french": "penser",
+    "rank": 86,
+    "prompts": [
+      "to think",
+      "I think so",
+      "What do you think?"
+    ],
+    "acceptedAnswers": [
+      "penser",
+      "pense",
+      "penses",
+      "pensons",
+      "pensez",
+      "pensent",
+      "pensé",
+      "pensait",
+      "pensera"
+    ]
+  },
+  {
+    "id": "card-87",
+    "french": "aussi",
+    "rank": 87,
+    "prompts": [
+      "also",
+      "too",
+      "as well"
+    ],
+    "acceptedAnswers": [
+      "aussi",
+      "aussi"
+    ]
+  },
+  {
+    "id": "card-88",
+    "french": "jamais",
+    "rank": 88,
+    "prompts": [
+      "never",
+      "ever"
+    ],
+    "acceptedAnswers": [
+      "jamais",
+      "jamais"
+    ]
+  },
+  {
+    "id": "card-89",
+    "french": "attendre",
+    "rank": 89,
+    "prompts": [
+      "to wait",
+      "Wait for me",
+      "I'm waiting"
+    ],
+    "acceptedAnswers": [
+      "attendre",
+      "attends",
+      "attend",
+      "attendons",
+      "attendez",
+      "attendent",
+      "attendu",
+      "attendait",
+      "attendra"
+    ]
+  },
+  {
+    "id": "card-90",
+    "french": "pourquoi",
+    "rank": 90,
+    "prompts": [
+      "why",
+      "why not?"
+    ],
+    "acceptedAnswers": [
+      "pourquoi",
+      "pourquoi"
+    ]
+  },
+  {
+    "id": "card-91",
+    "french": "trouver",
+    "rank": 91,
+    "prompts": [
+      "to find",
+      "I found it",
+      "We need to find"
+    ],
+    "acceptedAnswers": [
+      "trouver",
+      "trouve",
+      "trouves",
+      "trouvons",
+      "trouvez",
+      "trouvent",
+      "trouvé",
+      "trouvait",
+      "trouvera"
+    ]
+  },
+  {
+    "id": "card-92",
+    "french": "laisser",
+    "rank": 92,
+    "prompts": [
+      "to leave",
+      "Let me",
+      "Leave it"
+    ],
+    "acceptedAnswers": [
+      "laisser",
+      "laisse",
+      "laisses",
+      "laissons",
+      "laissez",
+      "laissent",
+      "laissé",
+      "laissait",
+      "laissera"
+    ]
+  },
+  {
+    "id": "card-93",
+    "french": "sa",
+    "rank": 93,
+    "prompts": [
+      "his/her",
+      "its"
+    ],
+    "acceptedAnswers": [
+      "sa",
+      "sa"
+    ]
+  },
+  {
+    "id": "card-94",
+    "french": "ta",
+    "rank": 94,
+    "prompts": [
+      "your"
+    ],
+    "acceptedAnswers": [
+      "ta",
+      "ta"
+    ]
+  },
+  {
+    "id": "card-95",
+    "french": "arriver",
+    "rank": 95,
+    "prompts": [
+      "to arrive",
+      "We arrived",
+      "It happened"
+    ],
+    "acceptedAnswers": [
+      "arriver",
+      "arrive",
+      "arrives",
+      "arrivons",
+      "arrivez",
+      "arrivent",
+      "arrivé",
+      "arrivait",
+      "arrivera"
+    ]
+  },
+  {
+    "id": "card-96",
+    "french": "ces",
+    "rank": 96,
+    "prompts": [
+      "these",
+      "those"
+    ],
+    "acceptedAnswers": [
+      "ces",
+      "ces"
+    ]
+  },
+  {
+    "id": "card-97",
+    "french": "donner",
+    "rank": 97,
+    "prompts": [
+      "to give",
+      "Give me",
+      "I'll give you"
+    ],
+    "acceptedAnswers": [
+      "donner",
+      "donne",
+      "donnes",
+      "donnons",
+      "donnez",
+      "donnent",
+      "donné",
+      "donnait",
+      "donnera"
+    ]
+  },
+  {
+    "id": "card-98",
+    "french": "regarder",
+    "rank": 98,
+    "prompts": [
+      "to look",
+      "Look at that",
+      "I'm watching"
+    ],
+    "acceptedAnswers": [
+      "regarder",
+      "regarde",
+      "regardes",
+      "regardons",
+      "regardez",
+      "regardent",
+      "regardé",
+      "regardait",
+      "regardera"
+    ]
+  },
+  {
+    "id": "card-99",
+    "french": "encore",
+    "rank": 99,
+    "prompts": [
+      "again",
+      "still",
+      "yet"
+    ],
+    "acceptedAnswers": [
+      "encore",
+      "encore"
+    ]
+  },
+  {
+    "id": "card-100",
+    "french": "appeler",
+    "rank": 100,
+    "prompts": [
+      "to call",
+      "Call me",
+      "What's your name?"
+    ],
+    "acceptedAnswers": [
+      "appeler",
+      "appelle",
+      "appelles",
+      "appelons",
+      "appelez",
+      "appellent",
+      "appelé",
+      "appelait",
+      "appellera"
+    ]
+  }
+]
