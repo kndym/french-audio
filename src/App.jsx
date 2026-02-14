@@ -39,7 +39,7 @@ function RecordButton({ onResult, disabled }) {
   // Abort mic on unmount (e.g. when CardView pauses or advances)
   useEffect(() => {
     return () => {
-      try { recRef.current?.abort(); } catch {}
+      try { recRef.current?.abort(); } catch { }
       recRef.current = null;
     };
   }, []);
@@ -689,11 +689,11 @@ function ConversationGaps({ cards, progress }) {
                     fontSize: '0.65rem', fontWeight: 600, padding: '0.1rem 0.3rem',
                     borderRadius: '4px',
                     background: w.cardProgress.state === STATE.REVIEW ? 'var(--accent)' :
-                               w.cardProgress.state === STATE.NEW ? 'var(--text-muted)' : 'var(--warning)',
+                      w.cardProgress.state === STATE.NEW ? 'var(--text-muted)' : 'var(--warning)',
                     color: 'white',
                   }}>
                     {w.cardProgress.state === STATE.NEW ? 'Not started' :
-                     w.cardProgress.state === STATE.REVIEW ? `${Math.round(w.cardProgress.interval || 0)}d` : 'Learning'}
+                      w.cardProgress.state === STATE.REVIEW ? `${Math.round(w.cardProgress.interval || 0)}d` : 'Learning'}
                   </span>
                 )}
               </div>
@@ -1111,102 +1111,102 @@ function CardView({ card, onResult }) {
         <>
           {promptBlock}
           {phase === 'attempt' && (
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            onClick={handleDontKnow}
-            style={{
-              flex: 1,
-              padding: '0.85rem',
-              fontSize: '1rem',
-              fontWeight: 600,
-              background: 'var(--danger)',
-              color: 'white',
-              borderRadius: 'var(--radius-sm)',
-            }}
-          >
-            I don't know
-          </button>
-          <div style={{ flex: 1 }}>
-            <RecordButton onResult={handleSpeechResult} />
-          </div>
-        </div>
-      )}
-
-      {phase === 'reveal' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* What you said (only if they recorded) */}
-          {transcript !== null && (
-            <div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                You said
-              </p>
-              <p style={{ fontSize: '1.1rem' }}>"{transcript}"</p>
-            </div>
-          )}
-
-          {/* Accepted answers */}
-          <div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-              Answer
-            </p>
-            <p style={{ fontSize: '1.15rem', fontWeight: 600 }}>
-              {acceptedAnswers.length > 2
-                ? `${card.french} (inf.) · ${acceptedAnswers.slice(0, 10).join(', ')}${acceptedAnswers.length > 10 ? '...' : ''}`
-                : acceptedAnswers.join(', ')}
-            </p>
-          </div>
-
-          {/* Self-grade or Next (if gave up) */}
-          {gaveUp ? (
-            <button
-              onClick={() => onResult({ correct: false, responseMs })}
-              style={{
-                width: '100%',
-                padding: '0.85rem',
-                fontSize: '1.1rem',
-                fontWeight: 600,
-                background: 'var(--accent)',
-                color: 'white',
-                borderRadius: 'var(--radius-sm)',
-                marginTop: '0.25rem',
-              }}
-            >
-              Next →
-            </button>
-          ) : (
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
-                onClick={() => onResult({ correct: false, responseMs })}
+                onClick={handleDontKnow}
                 style={{
                   flex: 1,
                   padding: '0.85rem',
-                  fontSize: '1.05rem',
+                  fontSize: '1rem',
                   fontWeight: 600,
                   background: 'var(--danger)',
                   color: 'white',
                   borderRadius: 'var(--radius-sm)',
                 }}
               >
-                Missed it
+                I don't know
               </button>
-              <button
-                onClick={() => onResult({ correct: true, responseMs })}
-                style={{
-                  flex: 1,
-                  padding: '0.85rem',
-                  fontSize: '1.05rem',
-                  fontWeight: 600,
-                  background: 'var(--success)',
-                  color: 'white',
-                  borderRadius: 'var(--radius-sm)',
-                }}
-              >
-                Got it
-              </button>
+              <div style={{ flex: 1 }}>
+                <RecordButton onResult={handleSpeechResult} />
+              </div>
             </div>
           )}
-        </div>
-      )}
+
+          {phase === 'reveal' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* What you said (only if they recorded) */}
+              {transcript !== null && (
+                <div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                    You said
+                  </p>
+                  <p style={{ fontSize: '1.1rem' }}>"{transcript}"</p>
+                </div>
+              )}
+
+              {/* Accepted answers */}
+              <div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                  Answer
+                </p>
+                <p style={{ fontSize: '1.15rem', fontWeight: 600 }}>
+                  {acceptedAnswers.length > 2
+                    ? `${card.french} (inf.) · ${acceptedAnswers.slice(0, 10).join(', ')}${acceptedAnswers.length > 10 ? '...' : ''}`
+                    : acceptedAnswers.join(', ')}
+                </p>
+              </div>
+
+              {/* Self-grade or Next (if gave up) */}
+              {gaveUp ? (
+                <button
+                  onClick={() => onResult({ correct: false, responseMs })}
+                  style={{
+                    width: '100%',
+                    padding: '0.85rem',
+                    fontSize: '1.1rem',
+                    fontWeight: 600,
+                    background: 'var(--accent)',
+                    color: 'white',
+                    borderRadius: 'var(--radius-sm)',
+                    marginTop: '0.25rem',
+                  }}
+                >
+                  Next →
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <button
+                    onClick={() => onResult({ correct: false, responseMs })}
+                    style={{
+                      flex: 1,
+                      padding: '0.85rem',
+                      fontSize: '1.05rem',
+                      fontWeight: 600,
+                      background: 'var(--danger)',
+                      color: 'white',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    Missed it
+                  </button>
+                  <button
+                    onClick={() => onResult({ correct: true, responseMs })}
+                    style={{
+                      flex: 1,
+                      padding: '0.85rem',
+                      fontSize: '1.05rem',
+                      fontWeight: 600,
+                      background: 'var(--success)',
+                      color: 'white',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    Got it
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -1242,7 +1242,7 @@ export default function App() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setProgress(JSON.parse(raw));
-    } catch {}
+    } catch { }
     try {
       const raw = localStorage.getItem(DAILY_NEW_KEY);
       if (raw) {
@@ -1254,7 +1254,7 @@ export default function App() {
           setDailyNew({ date: today, count: 0 });
         }
       }
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -1369,7 +1369,7 @@ export default function App() {
       <header style={{ textAlign: 'center', width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.25rem', marginBottom: '0.25rem' }}>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>
-            French Speech Flashcards
+            Parler — Learn French
           </h1>
           <button
             onClick={() => setView((v) => v === 'conversation' ? 'study' : 'conversation')}
