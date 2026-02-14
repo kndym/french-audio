@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getDueCards, processReview, getCardState, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
+import ConversationView from './ConversationView';
+import { computeTrends } from './session-analytics';
+import { unlockApiKey, hasEncryptedKey } from './crypto';
 
 const STORAGE_KEY = 'french-flashcards-progress';
 const DAILY_NEW_KEY = 'french-flashcards-daily-new';
 const BACKUP_KEY = 'french-flashcards-last-backup';
+const API_KEY_STORAGE = 'french-gemini-api-key';
+const STRUGGLED_WORDS_KEY = 'french-conversation-struggled';
 const BACKUP_VERSION = 1;
 
 function normalize(text) {
@@ -101,8 +106,20 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
   const [mergeMode, setMergeMode] = useState(true);
   const [toast, setToast] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [apiKey, setApiKey] = useState(() => {
+    try { return localStorage.getItem(API_KEY_STORAGE) || ''; } catch { return ''; }
+  });
+  const [password, setPassword] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [hasEncKey, setHasEncKey] = useState(false);
+  const [showManualKey, setShowManualKey] = useState(false);
   const fileInputRef = useRef(null);
   const resetTimerRef = useRef(null);
+
+  // Check if encrypted key file exists
+  useEffect(() => {
+    hasEncryptedKey().then(setHasEncKey);
+  }, []);
 
   const trackedCount = Object.keys(progress).length;
   const totalReviews = Object.values(progress).reduce((sum, p) => sum + (p.attempts || p.reps || 0), 0);
@@ -300,6 +317,198 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
         Merge on import (keep best progress per card)
       </label>
 
+      {/* Conversation Mode – API key unlock */}
+      <div style={{ borderTop: '1px solid var(--surface-hover)', paddingTop: '1rem', marginTop: '0.25rem' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Conversation Mode
+        </p>
+
+        {apiKey ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>API key active</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              {apiKey.slice(0, 8)}...
+            </span>
+            <button
+              onClick={() => {
+                localStorage.removeItem(API_KEY_STORAGE);
+                setApiKey('');
+                showToast('API key cleared');
+              }}
+              style={{
+                marginLeft: 'auto',
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                background: 'var(--surface-hover)',
+                color: 'var(--text-muted)',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        ) : hasEncKey ? (
+          <>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              Enter your password to unlock the API key.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && password) {
+                    setUnlocking(true);
+                    unlockApiKey(password)
+                      .then((key) => {
+                        setApiKey(key);
+                        setPassword('');
+                        showToast('API key unlocked');
+                      })
+                      .catch(() => showToast('Wrong password', true))
+                      .finally(() => setUnlocking(false));
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.6rem 0.75rem',
+                  fontSize: '0.9rem',
+                  background: 'var(--surface-hover)',
+                  color: 'var(--text)',
+                  border: '1px solid transparent',
+                  borderRadius: 'var(--radius-sm)',
+                  outline: 'none',
+                }}
+              />
+              <button
+                disabled={!password || unlocking}
+                onClick={() => {
+                  setUnlocking(true);
+                  unlockApiKey(password)
+                    .then((key) => {
+                      setApiKey(key);
+                      setPassword('');
+                      showToast('API key unlocked');
+                    })
+                    .catch(() => showToast('Wrong password', true))
+                    .finally(() => setUnlocking(false));
+                }}
+                style={{
+                  padding: '0.6rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  background: 'var(--accent)',
+                  color: 'white',
+                  borderRadius: 'var(--radius-sm)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {unlocking ? '...' : 'Unlock'}
+              </button>
+            </div>
+            <button
+              onClick={() => setShowManualKey((s) => !s)}
+              style={{
+                marginTop: '0.5rem',
+                padding: 0,
+                background: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.75rem',
+                textDecoration: 'underline',
+              }}
+            >
+              {showManualKey ? 'Hide manual entry' : 'Or paste API key manually'}
+            </button>
+            {showManualKey && (
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="AIza..."
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem 0.75rem',
+                    fontSize: '0.9rem',
+                    background: 'var(--surface-hover)',
+                    color: 'var(--text)',
+                    border: '1px solid transparent',
+                    borderRadius: 'var(--radius-sm)',
+                    fontFamily: 'monospace',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
+                    showToast(apiKey.trim() ? 'API key saved' : 'API key cleared');
+                  }}
+                  style={{
+                    padding: '0.6rem 1rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    background: 'var(--accent)',
+                    color: 'white',
+                    borderRadius: 'var(--radius-sm)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              Enter your Gemini API key for voice conversation practice.{' '}
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                Get a free key
+              </a>
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="AIza..."
+                style={{
+                  flex: 1,
+                  padding: '0.6rem 0.75rem',
+                  fontSize: '0.9rem',
+                  background: 'var(--surface-hover)',
+                  color: 'var(--text)',
+                  border: '1px solid transparent',
+                  borderRadius: 'var(--radius-sm)',
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={() => {
+                  localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
+                  showToast(apiKey.trim() ? 'API key saved' : 'API key cleared');
+                }}
+                style={{
+                  padding: '0.6rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  background: 'var(--accent)',
+                  color: 'white',
+                  borderRadius: 'var(--radius-sm)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Advanced */}
       <div style={{ borderTop: '1px solid var(--surface-hover)', paddingTop: '1rem', marginTop: '0.25rem' }}>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -352,6 +561,222 @@ function StatTile({ label, value, color }) {
     }}>
       <p style={{ fontSize: '1.5rem', fontWeight: 700, color, margin: 0, lineHeight: 1.2 }}>{value}</p>
       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>{label}</p>
+    </div>
+  );
+}
+
+function TrendIndicator({ trend }) {
+  if (trend === 'improving') return <span style={{ color: 'var(--success)', fontSize: '0.75rem', fontWeight: 600 }}> ↑ improving</span>;
+  if (trend === 'declining') return <span style={{ color: 'var(--warning)', fontSize: '0.75rem', fontWeight: 600 }}> ↓ declining</span>;
+  if (trend === 'stable') return <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}> → stable</span>;
+  return null;
+}
+
+function ConversationDashboard() {
+  const trends = useMemo(() => computeTrends(), []);
+  if (!trends || trends.totalSessions === 0) {
+    return (
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+          Conversation Practice
+        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          No conversation sessions yet. Start one with the 💬 button!
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem' }}>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+        Conversation Practice
+      </p>
+
+      {/* Summary stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem', marginBottom: '0.75rem' }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: 'var(--accent)' }}>{trends.streak}</p>
+          <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.1rem 0 0' }}>Day streak</p>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>{trends.sessionsThisWeek}</p>
+          <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.1rem 0 0' }}>This week</p>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>{trends.totalSessions}</p>
+          <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.1rem 0 0' }}>Total</p>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>{trends.avgDurationMin}m</p>
+          <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.1rem 0 0' }}>Avg length</p>
+        </div>
+      </div>
+
+      {/* Trend metrics */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0.5rem', background: 'var(--surface-hover)', borderRadius: 'var(--radius-sm)' }}>
+          <span style={{ fontSize: '0.8rem' }}>Help moments / session</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+            {trends.avgHelpMoments}
+            <TrendIndicator trend={trends.helpTrend} />
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0.5rem', background: 'var(--surface-hover)', borderRadius: 'var(--radius-sm)' }}>
+          <span style={{ fontSize: '0.8rem' }}>Vocabulary diversity</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+            {Math.round(trends.avgDiversity * 100)}%
+            <TrendIndicator trend={trends.diversityTrend} />
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0.5rem', background: 'var(--surface-hover)', borderRadius: 'var(--radius-sm)' }}>
+          <span style={{ fontSize: '0.8rem' }}>Words per minute</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+            {trends.avgWpm}
+            <TrendIndicator trend={trends.wpmTrend} />
+          </span>
+        </div>
+      </div>
+
+      {/* Recent sessions */}
+      {trends.recentSessions.length > 0 && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Recent sessions
+          </p>
+          <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            {trends.recentSessions.map((s) => (
+              <div key={s.id} style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.3rem 0', borderBottom: '1px solid var(--surface-hover)',
+                fontSize: '0.8rem',
+              }}>
+                <span style={{ color: 'var(--text-muted)', width: '5rem', fontSize: '0.7rem' }}>
+                  {new Date(s.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+                <span style={{ flex: 1 }}>
+                  {s.metrics?.durationMin || 0}m · {s.metrics?.totalUserWords || 0} words
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                  {s.metrics?.helpMoments || 0} helps
+                </span>
+                {s.aiAnalysis?.fluencyRating > 0 && (
+                  <span style={{
+                    fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.3rem',
+                    borderRadius: '4px',
+                    background: s.aiAnalysis.fluencyRating >= 4 ? 'var(--success)' : s.aiAnalysis.fluencyRating >= 3 ? 'var(--accent)' : 'var(--warning)',
+                    color: 'white',
+                  }}>
+                    {s.aiAnalysis.fluencyRating}/5
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConversationGaps({ cards, progress }) {
+  const [struggled, setStruggled] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STRUGGLED_WORDS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  if (struggled.length === 0) return null;
+
+  // Match struggled words to existing cards
+  const enriched = struggled.slice(-30).reverse().map((w) => {
+    const word = (w.word || '').toLowerCase().trim();
+    const matchCard = cards.find((c) =>
+      c.french.toLowerCase() === word ||
+      c.prompts?.some((p) => p.acceptedAnswers?.some((a) => a.toLowerCase() === word))
+    );
+    const cardProgress = matchCard ? getCardState(progress, matchCard.id) : null;
+    return { ...w, matchCard, cardProgress };
+  });
+
+  const inDeck = enriched.filter((w) => w.matchCard);
+  const notInDeck = enriched.filter((w) => !w.matchCard);
+
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem' }}>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+        Conversation vocabulary gaps ({enriched.length})
+      </p>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+        Words you struggled with in recent conversations
+      </p>
+      <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+        {inDeck.length > 0 && (
+          <>
+            <p style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 600, margin: '0.25rem 0', textTransform: 'uppercase' }}>
+              In your deck ({inDeck.length})
+            </p>
+            {inDeck.map((w, i) => (
+              <div key={`in-${i}`} style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.25rem 0', borderBottom: '1px solid var(--surface-hover)',
+                fontSize: '0.8rem',
+              }}>
+                <span style={{ fontWeight: 600, flex: 1 }}>{w.word}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{w.translation}</span>
+                {w.cardProgress && (
+                  <span style={{
+                    fontSize: '0.65rem', fontWeight: 600, padding: '0.1rem 0.3rem',
+                    borderRadius: '4px',
+                    background: w.cardProgress.state === STATE.REVIEW ? 'var(--accent)' :
+                               w.cardProgress.state === STATE.NEW ? 'var(--text-muted)' : 'var(--warning)',
+                    color: 'white',
+                  }}>
+                    {w.cardProgress.state === STATE.NEW ? 'Not started' :
+                     w.cardProgress.state === STATE.REVIEW ? `${Math.round(w.cardProgress.interval || 0)}d` : 'Learning'}
+                  </span>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+        {notInDeck.length > 0 && (
+          <>
+            <p style={{ fontSize: '0.7rem', color: 'var(--warning)', fontWeight: 600, margin: '0.5rem 0 0.25rem', textTransform: 'uppercase' }}>
+              Not in deck ({notInDeck.length})
+            </p>
+            {notInDeck.map((w, i) => (
+              <div key={`out-${i}`} style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.25rem 0', borderBottom: '1px solid var(--surface-hover)',
+                fontSize: '0.8rem',
+              }}>
+                <span style={{ fontWeight: 600, flex: 1 }}>{w.word}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{w.translation}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+      {struggled.length > 0 && (
+        <button
+          onClick={() => {
+            localStorage.removeItem(STRUGGLED_WORDS_KEY);
+            setStruggled([]);
+          }}
+          style={{
+            marginTop: '0.5rem',
+            padding: '0.35rem 0.7rem',
+            fontSize: '0.75rem',
+            background: 'var(--surface-hover)',
+            color: 'var(--text-muted)',
+            borderRadius: 'var(--radius-sm)',
+          }}
+        >
+          Clear gaps list
+        </button>
+      )}
     </div>
   );
 }
@@ -515,6 +940,10 @@ function Dashboard({ cards, progress }) {
           ))}
         </div>
       </div>
+
+      {/* Conversation stats */}
+      <ConversationDashboard />
+      <ConversationGaps cards={cards} progress={progress} />
 
       {/* Hardest words */}
       {stats.hardest.length > 0 && (
@@ -831,9 +1260,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [todayCount, setTodayCount] = useState(0);
   const [dailyNew, setDailyNew] = useState({ date: getTodayKey(), count: 0 });
-  const [view, setView] = useState('study'); // 'study' | 'settings' | 'dashboard'
+  const [view, setView] = useState('study'); // 'study' | 'settings' | 'dashboard' | 'conversation'
   const [lastBackup, setLastBackup] = useState(() => {
     try { return localStorage.getItem(BACKUP_KEY) || null; } catch { return null; }
+  });
+  const [struggledWords, setStruggledWords] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STRUGGLED_WORDS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
   });
 
   useEffect(() => {
@@ -916,6 +1351,19 @@ export default function App() {
     setLastBackup(null);
   }, []);
 
+  // Handle struggled words from conversation sessions (SRS bridge)
+  const handleStruggledWords = useCallback((words) => {
+    setStruggledWords((prev) => {
+      const existing = new Set(prev.map((w) => w.word));
+      const newWords = words.filter((w) => !existing.has(w.word));
+      const updated = [...prev, ...newWords.map((w) => ({ ...w, addedAt: Date.now() }))];
+      // Keep last 200 struggled words
+      const trimmed = updated.slice(-200);
+      localStorage.setItem(STRUGGLED_WORDS_KEY, JSON.stringify(trimmed));
+      return trimmed;
+    });
+  }, []);
+
   // Keep lastBackup in sync when localStorage changes (after export)
   useEffect(() => {
     const check = () => {
@@ -965,6 +1413,21 @@ export default function App() {
             French Speech Flashcards
           </h1>
           <button
+            onClick={() => setView((v) => v === 'conversation' ? 'study' : 'conversation')}
+            aria-label="Conversation"
+            style={{
+              background: view === 'conversation' ? 'var(--surface-hover)' : 'transparent',
+              color: 'var(--text-muted)',
+              fontSize: '1.15rem',
+              padding: '0.25rem 0.45rem',
+              borderRadius: 'var(--radius-sm)',
+              lineHeight: 1,
+              transition: 'background 0.2s',
+            }}
+          >
+            {view === 'conversation' ? '✕' : '💬'}
+          </button>
+          <button
             onClick={() => setView((v) => v === 'dashboard' ? 'study' : 'dashboard')}
             aria-label="Dashboard"
             style={{
@@ -1007,6 +1470,14 @@ export default function App() {
           onImport={handleImport}
           onReset={handleReset}
           lastBackup={lastBackup}
+        />
+      )}
+
+      {view === 'conversation' && (
+        <ConversationView
+          cards={cards}
+          progress={progress}
+          onStruggledWords={handleStruggledWords}
         />
       )}
 

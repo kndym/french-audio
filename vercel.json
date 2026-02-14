@@ -1,4 +1,4 @@
 {
-  "buildCommand": "npm run build-deck && npm run build",
+  "buildCommand": "npm run build-deck && npm run encrypt-key && npm run build",
   "outputDirectory": "dist"
 }
