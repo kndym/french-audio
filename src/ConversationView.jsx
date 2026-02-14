@@ -83,6 +83,7 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
   const sessionIdRef = useRef(null);
   const transcriptRef = useRef(transcript);
   const scrollRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   // Keep ref in sync
   useEffect(() => { transcriptRef.current = transcript; }, [transcript]);
@@ -100,6 +101,39 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
   const [passwordInput, setPasswordInput] = useState('');
   const [unlockingKey, setUnlockingKey] = useState(false);
 
+  // ── Wake lock helpers ────────────────────────────────────────
+  const acquireWakeLock = useCallback(async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('[WakeLock] acquired');
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('[WakeLock] released');
+        });
+      }
+    } catch (err) {
+      console.warn('[WakeLock] failed to acquire:', err.message);
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => { });
+      wakeLockRef.current = null;
+    }
+  }, []);
+
+  // Re-acquire wake lock when page becomes visible again (Safari releases it on tab switch)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && phase === 'active') {
+        acquireWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [phase, acquireWakeLock]);
+
   // ── Cleanup on unmount ───────────────────────────────────────
   useEffect(() => {
     return () => {
@@ -107,6 +141,7 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
       audioRef.current?.destroy();
       clearInterval(timerRef.current);
       clearInterval(levelRef.current);
+      releaseWakeLock();
     };
   }, []);
 
@@ -209,6 +244,7 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
         onConnected: () => {
           setPhase('active');
           startTimeRef.current = Date.now();
+          acquireWakeLock();
 
           // Start elapsed timer (also ticks `now` for transcript blur reveal)
           timerRef.current = setInterval(() => {
@@ -257,6 +293,7 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
     clearInterval(levelRef.current);
     timerRef.current = null;
     levelRef.current = null;
+    releaseWakeLock();
 
     clientRef.current?.disconnect();
     audioRef.current?.destroy();
