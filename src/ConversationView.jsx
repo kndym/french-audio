@@ -10,7 +10,7 @@ const SYSTEM_INSTRUCTION = `You are a natural French conversation partner for a 
 
 CORE RULES:
 1. Speak ONLY in French. Never switch to English unless the user is completely lost and explicitly asks.
-2. When the user hesitates or searches for a word:
+2. When the user hesitates or searches for a word mid-sentence:
    - First, wait a beat — give them time to find it themselves
    - If they're stuck, encourage circumlocution: "Tu peux décrire ce que tu veux dire ?"
    - If still stuck, offer a hint: first letter, a synonym, or a short definition in French
@@ -19,13 +19,14 @@ CORE RULES:
 4. Ask open-ended follow-up questions to keep the user producing speech
 5. Use common idiomatic expressions and collocations — expose the user to natural French
 6. Speak at a normal pace with clear articulation
-7. Keep your responses concise (2-4 sentences) to maximize the user's speaking time — this is THEIR practice, not a lecture
+7. Keep responses to 1-2 sentences MAXIMUM. This is the user's speaking practice — your job is to keep the ball in their court, not to lecture. Be concise.
+8. IMPORTANT: When the user DIRECTLY asks how to say an English word (e.g. "comment on dit X ?", "c'est quoi le mot pour X ?", "how do you say X"), give the French word IMMEDIATELY in one short sentence, then continue the conversation. Do NOT launch into a multi-sentence explanation or scaffolding. Example: "Ah, c'est 'ciseaux'. Et donc, tu disais...?" The scaffolding ladder from rule 2 is ONLY for when the user is struggling mid-sentence — not when they explicitly ask for a translation.
 
 CONVERSATION STYLE:
 - Warm, patient, genuinely curious — like a friend at a café
 - Vary topics naturally: daily life, opinions, culture, hypotheticals
 - Occasionally introduce a slightly challenging word and check comprehension
-- If the user says a word in English, say "Ah, tu cherches le mot pour [english word] ? En français on dit..." and help them find it
+- If the user says a word in English without asking for help, briefly give the French equivalent and move on
 
 Start by greeting the user warmly in French and asking a simple open-ended question to kick off the conversation.`;
 
@@ -44,6 +45,17 @@ const TOPICS = [
   'La technologie et l\'avenir',
 ];
 
+// ── Voice pool (mix of male/female for variety) ────────────────
+const VOICES = [
+  'Aoede', 'Kore', 'Leda', 'Zephyr', 'Puck',
+  'Charon', 'Fenrir', 'Orus', 'Enceladus',
+  'Achernar', 'Callirrhoe', 'Despina',
+];
+
+function randomVoice() {
+  return VOICES[Math.floor(Math.random() * VOICES.length)];
+}
+
 // ── Conversation phases ────────────────────────────────────────
 // idle -> connecting -> active -> ended
 
@@ -59,6 +71,9 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
   const [analyzing, setAnalyzing] = useState(false);
   const [muted, setMuted] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
+  const [showText, setShowText] = useState(false);  // toggle to reveal all text immediately
+  const [now, setNow] = useState(Date.now());       // ticks to reveal blurred bubbles
+  const [currentVoice, setCurrentVoice] = useState(null);
 
   const clientRef = useRef(null);
   const audioRef = useRef(null);
@@ -113,7 +128,12 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
     setTranscript([]);
     setSessionMetrics(null);
     setAiAnalysis(null);
+    setShowText(false);
     sessionIdRef.current = `conv-${Date.now()}`;
+
+    // Pick a random voice for this session
+    const voice = randomVoice();
+    setCurrentVoice(voice);
 
     try {
       // Set up audio
@@ -133,6 +153,7 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
       // Set up Gemini Live client
       const client = new GeminiLiveClient({
         apiKey,
+        voiceName: voice,
         systemInstruction: getSystemInstruction(),
         onAudio: (pcm16) => {
           audio.playAudio(pcm16);
@@ -189,10 +210,12 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
           setPhase('active');
           startTimeRef.current = Date.now();
 
-          // Start elapsed timer
+          // Start elapsed timer (also ticks `now` for transcript blur reveal)
           timerRef.current = setInterval(() => {
-            const elapsed = Date.now() - startTimeRef.current;
+            const t = Date.now();
+            const elapsed = t - startTimeRef.current;
             setElapsedMs(elapsed);
+            setNow(t);
             if (elapsed >= MAX_SESSION_MS) {
               handleEnd();
             }
@@ -461,6 +484,11 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                 {modelSpeaking ? 'AI speaking...' : 'Listening...'}
               </span>
+              {currentVoice && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.6 }}>
+                  ({currentVoice})
+                </span>
+              )}
             </div>
             <span style={{
               fontSize: '0.85rem',
@@ -492,29 +520,47 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
                 Waiting for the conversation to begin...
               </p>
             )}
-            {transcript.map((entry, i) => (
-              <div
-                key={i}
-                style={{
-                  ...styles.transcriptEntry,
-                  alignSelf: entry.role === 'user' ? 'flex-end' : 'flex-start',
-                }}
-              >
-                <div style={{
-                  ...styles.transcriptBubble,
-                  background: entry.role === 'user' ? 'var(--accent)' : 'var(--surface-hover)',
-                  color: entry.role === 'user' ? 'white' : 'var(--text)',
-                  borderBottomRightRadius: entry.role === 'user' ? '4px' : 'var(--radius-sm)',
-                  borderBottomLeftRadius: entry.role === 'model' ? '4px' : 'var(--radius-sm)',
-                }}>
-                  {entry.text}
+            {transcript.map((entry, i) => {
+              const age = now - (entry.timestamp || 0);
+              const revealed = showText || age >= 10000;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    ...styles.transcriptEntry,
+                    alignSelf: entry.role === 'user' ? 'flex-end' : 'flex-start',
+                  }}
+                >
+                  <div style={{
+                    ...styles.transcriptBubble,
+                    background: entry.role === 'user' ? 'var(--accent)' : 'var(--surface-hover)',
+                    color: entry.role === 'user' ? 'white' : 'var(--text)',
+                    borderBottomRightRadius: entry.role === 'user' ? '4px' : 'var(--radius-sm)',
+                    borderBottomLeftRadius: entry.role === 'model' ? '4px' : 'var(--radius-sm)',
+                    filter: revealed ? 'none' : 'blur(8px)',
+                    userSelect: revealed ? 'auto' : 'none',
+                    transition: 'filter 0.5s ease',
+                  }}>
+                    {entry.text}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Controls */}
           <div style={styles.activeControls}>
+            <button
+              onClick={() => setShowText((s) => !s)}
+              style={{
+                ...styles.controlBtn,
+                background: showText ? 'var(--accent)' : 'var(--surface-hover)',
+                color: showText ? 'white' : 'var(--text)',
+                fontSize: '0.8rem',
+              }}
+            >
+              {showText ? 'Hide Text' : 'Show Text'}
+            </button>
             <button onClick={toggleMute} style={{
               ...styles.controlBtn,
               background: muted ? 'var(--danger)' : 'var(--surface-hover)',

@@ -14,6 +14,7 @@ const MODEL = 'gemini-2.5-flash-native-audio-latest';
  * @typedef {Object} GeminiLiveOptions
  * @property {string} apiKey
  * @property {string} systemInstruction
+ * @property {string} [voiceName]       - prebuilt voice name (default: 'Aoede')
  * @property {function(Int16Array): void} onAudio       - received audio chunk (PCM16 24kHz)
  * @property {function(string): void}     onText        - model text / transcript
  * @property {function(string, string): void} onTranscript - (role, text) for input/output transcripts
@@ -51,7 +52,7 @@ export class GeminiLiveClient {
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: 'Aoede',   // clear female French-capable voice
+                  voiceName: this.opts.voiceName || 'Aoede',
                 },
               },
             },
