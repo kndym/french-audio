@@ -363,7 +363,10 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
                         setPassword('');
                         showToast('API key unlocked');
                       })
-                      .catch(() => showToast('Wrong password or no encrypted key found', true))
+                      .catch((err) => {
+                        console.error('Unlock failed:', err);
+                        showToast(err?.message || 'Wrong password', true);
+                      })
                       .finally(() => setUnlocking(false));
                   }
                 }}
@@ -388,7 +391,10 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
                       setPassword('');
                       showToast('API key unlocked');
                     })
-                    .catch(() => showToast('Wrong password or no encrypted key found', true))
+                    .catch((err) => {
+                      console.error('Unlock failed:', err);
+                      showToast(err?.message || 'Wrong password', true);
+                    })
                     .finally(() => setUnlocking(false));
                 }}
                 style={{

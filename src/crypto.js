@@ -17,9 +17,25 @@ const API_KEY_STORAGE = 'french-gemini-api-key';
  */
 export async function decryptApiKey(password) {
   // Fetch the encrypted blob
-  const res = await fetch('/key.enc.json');
-  if (!res.ok) throw new Error('No encrypted key found (key.enc.json missing)');
-  const { salt, iv, data } = await res.json();
+  let res;
+  try {
+    res = await fetch('/key.enc.json');
+  } catch (e) {
+    throw new Error(`Could not fetch key file: ${e.message}`);
+  }
+  if (!res.ok) throw new Error(`key.enc.json returned ${res.status}`);
+
+  let json;
+  try {
+    json = await res.json();
+  } catch (e) {
+    throw new Error(`key.enc.json is not valid JSON: ${e.message}`);
+  }
+  const { salt, iv, data } = json;
+
+  if (!salt || !iv || !data) {
+    throw new Error('key.enc.json is missing required fields');
+  }
 
   // Decode base64
   const saltBytes = Uint8Array.from(atob(salt), (c) => c.charCodeAt(0));

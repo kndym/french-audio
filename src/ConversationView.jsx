@@ -312,7 +312,15 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
         setApiKey(key);
         setPasswordInput('');
       })
-      .catch(() => setError('Wrong password. Try again.'))
+      .catch((err) => {
+        console.error('Unlock failed:', err);
+        const msg = err?.message || '';
+        if (msg.includes('fetch') || msg.includes('JSON') || msg.includes('missing')) {
+          setError(msg);
+        } else {
+          setError('Wrong password. Try again.');
+        }
+      })
       .finally(() => setUnlockingKey(false));
   }, [passwordInput]);
 
