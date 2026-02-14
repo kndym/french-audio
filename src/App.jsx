@@ -26,9 +26,18 @@ function matchesAnswer(spoken, acceptedAnswers) {
 function RecordButton({ onResult, disabled }) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState(null);
+  const recRef = useRef(null);
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const supported = !!SpeechRecognition;
+
+  // Abort mic on unmount (e.g. when CardView pauses or advances)
+  useEffect(() => {
+    return () => {
+      try { recRef.current?.abort(); } catch {}
+      recRef.current = null;
+    };
+  }, []);
 
   const start = useCallback(() => {
     if (!supported) {
@@ -37,6 +46,7 @@ function RecordButton({ onResult, disabled }) {
     }
     setError(null);
     const rec = new SpeechRecognition();
+    recRef.current = rec;
     rec.lang = 'fr-FR';
     rec.continuous = false;
     rec.interimResults = false;
@@ -577,9 +587,11 @@ function Dashboard({ cards, progress }) {
   );
 }
 
+const IDLE_TIMEOUT_MS = 30000;
+
 function CardView({ card, onResult }) {
   const [promptIndex] = useState(() => Math.floor(Math.random() * card.prompts.length));
-  // phase: 'attempt' -> 'reveal'  (done via onResult)
+  // phase: 'attempt' | 'paused' | 'reveal'
   const [phase, setPhase] = useState('attempt');
   const [transcript, setTranscript] = useState(null); // null = not recorded, string = recorded
   const [gaveUp, setGaveUp] = useState(false);
@@ -590,6 +602,28 @@ function CardView({ card, onResult }) {
   const isNewFormat = typeof prompt === 'object' && prompt.sentence && prompt.hint;
   const displayPrompt = isNewFormat ? prompt : { sentence: prompt, hint: null, acceptedAnswers: card.acceptedAnswers || [card.french] };
   const acceptedAnswers = isNewFormat ? prompt.acceptedAnswers : (card.acceptedAnswers || [card.french]);
+
+  // Idle timeout: pause after 30s of inactivity or when tab is hidden
+  useEffect(() => {
+    if (phase !== 'attempt') return;
+
+    const timer = setTimeout(() => setPhase('paused'), IDLE_TIMEOUT_MS);
+
+    const handleVisibility = () => {
+      if (document.hidden) setPhase('paused');
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [phase]);
+
+  const handleResume = useCallback(() => {
+    startTimeRef.current = Date.now();
+    setPhase('attempt');
+  }, []);
 
   const handleSpeechResult = useCallback((text) => {
     responseTimeRef.current = Date.now() - startTimeRef.current;
@@ -605,7 +639,7 @@ function CardView({ card, onResult }) {
 
   const responseMs = responseTimeRef.current;
 
-  // Prompt display (shared between phases)
+  // Prompt display (shared between attempt and reveal phases)
   const promptBlock = (
     <>
       <p
@@ -666,9 +700,29 @@ function CardView({ card, onResult }) {
         boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
       }}
     >
-      {promptBlock}
-
-      {phase === 'attempt' && (
+      {phase === 'paused' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1rem 0' }}>
+          <p style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>Session paused</p>
+          <button
+            onClick={handleResume}
+            style={{
+              width: '100%',
+              maxWidth: '280px',
+              padding: '1rem 1.5rem',
+              fontSize: '1.15rem',
+              fontWeight: 600,
+              background: 'var(--accent)',
+              color: 'white',
+              borderRadius: 'var(--radius)',
+            }}
+          >
+            Resume
+          </button>
+        </div>
+      ) : (
+        <>
+          {promptBlock}
+          {phase === 'attempt' && (
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
             onClick={handleDontKnow}
@@ -764,6 +818,8 @@ function CardView({ card, onResult }) {
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );
