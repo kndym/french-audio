@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getDueCards, processReview, getCardState, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
 import ConversationView from './ConversationView';
 import { computeTrends } from './session-analytics';
-import { unlockApiKey, hasEncryptedKey } from './crypto';
+import { unlockApiKey } from './crypto';
 
 const STORAGE_KEY = 'french-flashcards-progress';
 const DAILY_NEW_KEY = 'french-flashcards-daily-new';
@@ -111,15 +111,9 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
   });
   const [password, setPassword] = useState('');
   const [unlocking, setUnlocking] = useState(false);
-  const [hasEncKey, setHasEncKey] = useState(false);
   const [showManualKey, setShowManualKey] = useState(false);
   const fileInputRef = useRef(null);
   const resetTimerRef = useRef(null);
-
-  // Check if encrypted key file exists
-  useEffect(() => {
-    hasEncryptedKey().then(setHasEncKey);
-  }, []);
 
   const trackedCount = Object.keys(progress).length;
   const totalReviews = Object.values(progress).reduce((sum, p) => sum + (p.attempts || p.reps || 0), 0);
@@ -348,8 +342,9 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
               Clear
             </button>
           </div>
-        ) : hasEncKey ? (
+        ) : (
           <>
+            {/* Password unlock (primary) */}
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               Enter your password to unlock the API key.
             </p>
@@ -368,7 +363,7 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
                         setPassword('');
                         showToast('API key unlocked');
                       })
-                      .catch(() => showToast('Wrong password', true))
+                      .catch(() => showToast('Wrong password or no encrypted key found', true))
                       .finally(() => setUnlocking(false));
                   }
                 }}
@@ -393,7 +388,7 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
                       setPassword('');
                       showToast('API key unlocked');
                     })
-                    .catch(() => showToast('Wrong password', true))
+                    .catch(() => showToast('Wrong password or no encrypted key found', true))
                     .finally(() => setUnlocking(false));
                 }}
                 style={{
@@ -409,6 +404,8 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
                 {unlocking ? '...' : 'Unlock'}
               </button>
             </div>
+
+            {/* Manual API key (fallback toggle) */}
             <button
               onClick={() => setShowManualKey((s) => !s)}
               style={{
@@ -426,9 +423,8 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <input
                   type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
                   placeholder="AIza..."
+                  onChange={(e) => setApiKey(e.target.value)}
                   style={{
                     flex: 1,
                     padding: '0.6rem 0.75rem',
@@ -443,8 +439,10 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
                 />
                 <button
                   onClick={() => {
-                    localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
-                    showToast(apiKey.trim() ? 'API key saved' : 'API key cleared');
+                    if (apiKey.trim()) {
+                      localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
+                      showToast('API key saved');
+                    }
                   }}
                   style={{
                     padding: '0.6rem 1rem',
@@ -460,51 +458,6 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
                 </button>
               </div>
             )}
-          </>
-        ) : (
-          <>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-              Enter your Gemini API key for voice conversation practice.{' '}
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
-                Get a free key
-              </a>
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="AIza..."
-                style={{
-                  flex: 1,
-                  padding: '0.6rem 0.75rem',
-                  fontSize: '0.9rem',
-                  background: 'var(--surface-hover)',
-                  color: 'var(--text)',
-                  border: '1px solid transparent',
-                  borderRadius: 'var(--radius-sm)',
-                  fontFamily: 'monospace',
-                  outline: 'none',
-                }}
-              />
-              <button
-                onClick={() => {
-                  localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
-                  showToast(apiKey.trim() ? 'API key saved' : 'API key cleared');
-                }}
-                style={{
-                  padding: '0.6rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: 'white',
-                  borderRadius: 'var(--radius-sm)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Save
-              </button>
-            </div>
           </>
         )}
       </div>

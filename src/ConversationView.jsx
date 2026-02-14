@@ -3,7 +3,7 @@ import { GeminiLiveClient } from './gemini-live';
 import { AudioManager } from './audio-manager';
 import { computeMetrics, saveSession, updateSession } from './session-analytics';
 import { analyzeSession } from './gemini-text';
-import { unlockApiKey, hasEncryptedKey } from './crypto';
+import { unlockApiKey } from './crypto';
 
 // ── System prompt ──────────────────────────────────────────────
 const SYSTEM_INSTRUCTION = `You are a natural French conversation partner for a B2-level learner who understands well but struggles with vocabulary recall (active production).
@@ -84,12 +84,6 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
   });
   const [passwordInput, setPasswordInput] = useState('');
   const [unlockingKey, setUnlockingKey] = useState(false);
-  const [hasEncKey, setHasEncKey] = useState(false);
-
-  // Check if encrypted key file exists
-  useEffect(() => {
-    hasEncryptedKey().then(setHasEncKey);
-  }, []);
 
   // ── Cleanup on unmount ───────────────────────────────────────
   useEffect(() => {
@@ -328,60 +322,53 @@ export default function ConversationView({ cards, progress, onStruggledWords }) 
       <div style={styles.container}>
         <div style={styles.card}>
           <h2 style={styles.cardTitle}>Conversation Practice</h2>
-
-          {hasEncKey ? (
-            <>
-              <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                Enter your password to unlock the API key.
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <input
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="Password..."
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleUnlock(); }}
-                  style={{
-                    flex: 1,
-                    padding: '0.7rem 0.75rem',
-                    fontSize: '1rem',
-                    background: 'var(--surface-hover)',
-                    color: 'var(--text)',
-                    border: '1px solid transparent',
-                    borderRadius: 'var(--radius-sm)',
-                    outline: 'none',
-                  }}
-                />
-                <button
-                  disabled={!passwordInput || unlockingKey}
-                  onClick={handleUnlock}
-                  style={{
-                    ...styles.startBtn,
-                    width: 'auto',
-                    padding: '0.7rem 1.25rem',
-                  }}
-                >
-                  {unlockingKey ? '...' : 'Unlock'}
-                </button>
-              </div>
-            </>
-          ) : (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem' }}>
-              Go to Settings and enter your Gemini API key to use conversation mode.
-              Get a free key at{' '}
-              <a
-                href="https://aistudio.google.com/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--accent)' }}
-              >
-                aistudio.google.com
-              </a>
-            </p>
-          )}
+          <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem', marginBottom: '1rem' }}>
+            Enter your password to unlock the API key.
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              placeholder="Password..."
+              onKeyDown={(e) => { if (e.key === 'Enter') handleUnlock(); }}
+              style={{
+                flex: 1,
+                padding: '0.7rem 0.75rem',
+                fontSize: '1rem',
+                background: 'var(--surface-hover)',
+                color: 'var(--text)',
+                border: '1px solid transparent',
+                borderRadius: 'var(--radius-sm)',
+                outline: 'none',
+              }}
+            />
+            <button
+              disabled={!passwordInput || unlockingKey}
+              onClick={handleUnlock}
+              style={{
+                ...styles.startBtn,
+                width: 'auto',
+                padding: '0.7rem 1.25rem',
+              }}
+            >
+              {unlockingKey ? '...' : 'Unlock'}
+            </button>
+          </div>
+          <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.75rem' }}>
+            Or set your API key in Settings.{' '}
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--accent)' }}
+            >
+              Get a free key
+            </a>
+          </p>
 
           {error && (
-            <p style={{ color: 'var(--danger)', fontSize: '0.85rem', textAlign: 'center' }}>
+            <p style={{ color: 'var(--danger)', fontSize: '0.85rem', textAlign: 'center', marginTop: '0.5rem' }}>
               {error}
             </p>
           )}
