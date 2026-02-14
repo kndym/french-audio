@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getDueCards, processReview, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { getDueCards, processReview, getCardState, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
 
 const STORAGE_KEY = 'french-flashcards-progress';
 const DAILY_NEW_KEY = 'french-flashcards-daily-new';
@@ -330,6 +330,253 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
   );
 }
 
+// ── Dashboard ──
+
+function StatTile({ label, value, color }) {
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      borderRadius: 'var(--radius-sm)',
+      padding: '0.75rem',
+      textAlign: 'center',
+    }}>
+      <p style={{ fontSize: '1.5rem', fontWeight: 700, color, margin: 0, lineHeight: 1.2 }}>{value}</p>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>{label}</p>
+    </div>
+  );
+}
+
+function Dashboard({ cards, progress }) {
+  const [showAllWords, setShowAllWords] = useState(false);
+
+  const stats = useMemo(() => {
+    let mastered = 0, learning = 0, knownOnSight = 0, unseen = 0;
+    let totalAttempts = 0, totalCorrect = 0, responseMsSum = 0, responseMsCount = 0;
+    const cardDetails = [];
+
+    for (const card of cards) {
+      const p = getCardState(progress, card.id);
+      const attempts = p.attempts || 0;
+      const correct = p.correctAttempts || 0;
+      const accuracy = attempts > 0 ? correct / attempts : null;
+      const avgMs = p.avgResponseMs || 0;
+
+      totalAttempts += attempts;
+      totalCorrect += correct;
+      if (avgMs > 0 && attempts > 0) { responseMsSum += avgMs; responseMsCount++; }
+
+      if (p.state === STATE.NEW) {
+        unseen++;
+      } else if (p.knownOnSight) {
+        knownOnSight++;
+      } else if (p.state === STATE.REVIEW && (p.interval || 0) >= 21) {
+        mastered++;
+      } else {
+        learning++;
+      }
+
+      cardDetails.push({ ...card, p, accuracy, avgMs, attempts });
+    }
+
+    // Forecast: next 7 days
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const forecast = Array(7).fill(0);
+    for (const card of cards) {
+      const p = getCardState(progress, card.id);
+      if (p.state === STATE.NEW || !p.nextReview) continue;
+      const daysOut = Math.max(0, Math.floor((p.nextReview - now) / dayMs));
+      if (daysOut < 7) forecast[daysOut]++;
+    }
+    const forecastMax = Math.max(...forecast, 1);
+
+    // Hardest words: lowest accuracy, with at least 1 attempt
+    const hardest = cardDetails
+      .filter((c) => c.attempts > 0 && c.accuracy !== null)
+      .sort((a, b) => a.accuracy - b.accuracy)
+      .slice(0, 20);
+
+    // All words sorted by rank
+    const allWords = [...cardDetails].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+
+    const overallAccuracy = totalAttempts > 0 ? totalCorrect / totalAttempts : 0;
+    const avgResponseMs = responseMsCount > 0 ? responseMsSum / responseMsCount : 0;
+
+    return {
+      mastered, learning, knownOnSight, unseen,
+      total: cards.length,
+      totalAttempts, overallAccuracy, avgResponseMs,
+      forecast, forecastMax,
+      hardest, allWords,
+    };
+  }, [cards, progress]);
+
+  const stateColor = (p) => {
+    if (p.state === STATE.NEW) return 'var(--text-muted)';
+    if (p.knownOnSight) return '#9090a0';
+    if (p.state === STATE.REVIEW && (p.interval || 0) >= 21) return 'var(--success)';
+    if (p.state === STATE.REVIEW) return 'var(--accent)';
+    if (p.state === STATE.LEARNING) return 'var(--warning)';
+    if (p.state === STATE.RELEARNING) return 'var(--danger)';
+    return 'var(--text-muted)';
+  };
+
+  const stateLabel = (p) => {
+    if (p.state === STATE.NEW) return 'New';
+    if (p.knownOnSight) return 'Known';
+    if (p.state === STATE.REVIEW && (p.interval || 0) >= 21) return 'Mastered';
+    if (p.state === STATE.REVIEW) return 'Review';
+    if (p.state === STATE.LEARNING) return 'Learning';
+    if (p.state === STATE.RELEARNING) return 'Relearn';
+    return 'New';
+  };
+
+  const pct = (n) => stats.total > 0 ? (n / stats.total * 100) : 0;
+
+  // Day labels for forecast
+  const dayLabels = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
+    dayLabels.push(i === 0 ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }));
+  }
+
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* Stat tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+        <StatTile label="Mastered" value={stats.mastered} color="var(--success)" />
+        <StatTile label="Learning" value={stats.learning} color="var(--accent)" />
+        <StatTile label="Known on sight" value={stats.knownOnSight} color="var(--text-muted)" />
+        <StatTile label="Unseen" value={stats.unseen} color="#555" />
+      </div>
+
+      {/* Stacked progress bar */}
+      <div style={{
+        width: '100%', height: '10px', borderRadius: '5px', overflow: 'hidden',
+        display: 'flex', background: 'var(--surface)',
+      }}>
+        {pct(stats.mastered) > 0 && <div style={{ width: `${pct(stats.mastered)}%`, background: 'var(--success)' }} />}
+        {pct(stats.learning) > 0 && <div style={{ width: `${pct(stats.learning)}%`, background: 'var(--accent)' }} />}
+        {pct(stats.knownOnSight) > 0 && <div style={{ width: `${pct(stats.knownOnSight)}%`, background: '#9090a0' }} />}
+        {pct(stats.unseen) > 0 && <div style={{ width: `${pct(stats.unseen)}%`, background: 'var(--surface-hover)' }} />}
+      </div>
+
+      {/* Accuracy & speed */}
+      <div style={{
+        background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem',
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', textAlign: 'center',
+      }}>
+        <div>
+          <p style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: stats.overallAccuracy >= 0.8 ? 'var(--success)' : stats.overallAccuracy >= 0.5 ? 'var(--warning)' : 'var(--danger)' }}>
+            {stats.totalAttempts > 0 ? `${Math.round(stats.overallAccuracy * 100)}%` : '--'}
+          </p>
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0.15rem 0 0' }}>Accuracy</p>
+        </div>
+        <div>
+          <p style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>
+            {stats.avgResponseMs > 0 ? `${(stats.avgResponseMs / 1000).toFixed(1)}s` : '--'}
+          </p>
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0.15rem 0 0' }}>Avg speed</p>
+        </div>
+        <div>
+          <p style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>{stats.totalAttempts}</p>
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0.15rem 0 0' }}>Reviews</p>
+        </div>
+      </div>
+
+      {/* Forecast */}
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+          Upcoming reviews
+        </p>
+        <div style={{ display: 'flex', gap: '3px', alignItems: 'flex-end', height: '80px' }}>
+          {stats.forecast.map((count, i) => (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{count || ''}</span>
+              <div style={{
+                width: '100%',
+                height: `${Math.max(2, (count / stats.forecastMax) * 55)}px`,
+                background: i === 0 ? 'var(--accent)' : 'var(--surface-hover)',
+                borderRadius: '3px 3px 0 0',
+                transition: 'height 0.3s',
+              }} />
+              <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{dayLabels[i]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Hardest words */}
+      {stats.hardest.length > 0 && (
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem' }}>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+            Hardest words
+          </p>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {stats.hardest.map((c) => (
+              <div key={c.id} style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.35rem 0', borderBottom: '1px solid var(--surface-hover)',
+                fontSize: '0.85rem',
+              }}>
+                <span style={{ color: 'var(--text-muted)', width: '2rem', textAlign: 'right', fontSize: '0.7rem' }}>#{c.rank}</span>
+                <span style={{ flex: 1, fontWeight: 600 }}>{c.french}</span>
+                <span style={{ color: c.accuracy < 0.5 ? 'var(--danger)' : c.accuracy < 0.8 ? 'var(--warning)' : 'var(--success)', fontWeight: 600, fontSize: '0.8rem' }}>
+                  {Math.round(c.accuracy * 100)}%
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', width: '3rem', textAlign: 'right' }}>
+                  {c.avgMs > 0 ? `${(c.avgMs / 1000).toFixed(1)}s` : '--'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All words (collapsible) */}
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', padding: '1rem' }}>
+        <button
+          onClick={() => setShowAllWords((s) => !s)}
+          style={{
+            width: '100%', background: 'none', color: 'var(--text-muted)',
+            fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase',
+            letterSpacing: '0.05em', textAlign: 'left', padding: 0,
+          }}
+        >
+          All words ({stats.total}) {showAllWords ? '▾' : '▸'}
+        </button>
+        {showAllWords && (
+          <div style={{ maxHeight: '400px', overflowY: 'auto', marginTop: '0.5rem' }}>
+            {stats.allWords.map((c) => (
+              <div key={c.id} style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                padding: '0.3rem 0', borderBottom: '1px solid var(--surface-hover)',
+                fontSize: '0.8rem',
+              }}>
+                <span style={{ color: 'var(--text-muted)', width: '2.2rem', textAlign: 'right', fontSize: '0.65rem' }}>#{c.rank}</span>
+                <span style={{ flex: 1, fontWeight: 500 }}>{c.french}</span>
+                <span style={{
+                  fontSize: '0.65rem', fontWeight: 600, padding: '0.1rem 0.35rem',
+                  borderRadius: '4px', background: stateColor(c.p), color: 'white',
+                  minWidth: '3.5rem', textAlign: 'center',
+                }}>
+                  {stateLabel(c.p)}
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', width: '2.5rem', textAlign: 'right' }}>
+                  {c.p.interval ? `${Math.round(c.p.interval)}d` : '--'}
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', width: '2.5rem', textAlign: 'right' }}>
+                  {c.accuracy !== null ? `${Math.round(c.accuracy * 100)}%` : '--'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CardView({ card, onResult }) {
   const [promptIndex] = useState(() => Math.floor(Math.random() * card.prompts.length));
   // phase: 'attempt' -> 'reveal'  (done via onResult)
@@ -528,7 +775,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [todayCount, setTodayCount] = useState(0);
   const [dailyNew, setDailyNew] = useState({ date: getTodayKey(), count: 0 });
-  const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState('study'); // 'study' | 'settings' | 'dashboard'
   const [lastBackup, setLastBackup] = useState(() => {
     try { return localStorage.getItem(BACKUP_KEY) || null; } catch { return null; }
   });
@@ -657,24 +904,39 @@ export default function App() {
       }}
     >
       <header style={{ textAlign: 'center', width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.25rem', marginBottom: '0.25rem' }}>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>
             French Speech Flashcards
           </h1>
           <button
-            onClick={() => setShowSettings((s) => !s)}
-            aria-label="Settings"
+            onClick={() => setView((v) => v === 'dashboard' ? 'study' : 'dashboard')}
+            aria-label="Dashboard"
             style={{
-              background: showSettings ? 'var(--surface-hover)' : 'transparent',
+              background: view === 'dashboard' ? 'var(--surface-hover)' : 'transparent',
               color: 'var(--text-muted)',
-              fontSize: '1.25rem',
-              padding: '0.25rem 0.5rem',
+              fontSize: '1.15rem',
+              padding: '0.25rem 0.45rem',
               borderRadius: 'var(--radius-sm)',
               lineHeight: 1,
               transition: 'background 0.2s',
             }}
           >
-            {showSettings ? '✕' : '⚙'}
+            {view === 'dashboard' ? '✕' : '📊'}
+          </button>
+          <button
+            onClick={() => setView((v) => v === 'settings' ? 'study' : 'settings')}
+            aria-label="Settings"
+            style={{
+              background: view === 'settings' ? 'var(--surface-hover)' : 'transparent',
+              color: 'var(--text-muted)',
+              fontSize: '1.15rem',
+              padding: '0.25rem 0.45rem',
+              borderRadius: 'var(--radius-sm)',
+              lineHeight: 1,
+              transition: 'background 0.2s',
+            }}
+          >
+            {view === 'settings' ? '✕' : '⚙'}
           </button>
         </div>
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
@@ -682,7 +944,7 @@ export default function App() {
         </p>
       </header>
 
-      {showSettings && (
+      {view === 'settings' && (
         <SettingsPanel
           progress={progress}
           dailyNew={dailyNew}
@@ -692,25 +954,31 @@ export default function App() {
         />
       )}
 
-      {current ? (
-        <CardView key={current.id} card={current} onResult={handleResult} />
-      ) : (
-        <div
-          style={{
-            background: 'var(--surface)',
-            borderRadius: 'var(--radius)',
-            padding: '2rem',
-            textAlign: 'center',
-            width: '100%',
-          }}
-        >
-          <p style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>All done for now!</p>
-          <p style={{ color: 'var(--text-muted)' }}>
-            {newRemaining > 0 && newCount > 0
-              ? `${newRemaining} new cards remaining today. No reviews due right now.`
-              : 'No cards due today. Come back tomorrow for more reviews.'}
-          </p>
-        </div>
+      {view === 'dashboard' && (
+        <Dashboard cards={cards} progress={progress} />
+      )}
+
+      {view === 'study' && (
+        current ? (
+          <CardView key={current.id} card={current} onResult={handleResult} />
+        ) : (
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius)',
+              padding: '2rem',
+              textAlign: 'center',
+              width: '100%',
+            }}
+          >
+            <p style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>All done for now!</p>
+            <p style={{ color: 'var(--text-muted)' }}>
+              {newRemaining > 0 && newCount > 0
+                ? `${newRemaining} new cards remaining today. No reviews due right now.`
+                : 'No cards due today. Come back tomorrow for more reviews.'}
+            </p>
+          </div>
+        )
       )}
     </div>
   );
