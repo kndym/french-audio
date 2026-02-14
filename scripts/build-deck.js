@@ -1,6 +1,11 @@
 /**
- * Build cards.json from words.csv - top 100 French lemmas with French fill-in-blank prompts.
- * Run: node scripts/build-deck.js
+ * Build cards.json from words.csv, merging hand-crafted prompts with LLM-generated ones.
+ *
+ * Usage:
+ *   node scripts/build-deck.js                # all available cards
+ *   node scripts/build-deck.js --count 500    # first 500 words only
+ *
+ * Priority: hand-crafted prompts > LLM-generated > fallback placeholder.
  */
 
 import fs from 'fs';
@@ -9,6 +14,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CSV_PATH = path.join(__dirname, '..', 'words.csv');
+const GENERATED_PATH = path.join(__dirname, '..', 'generated-cards.json');
 const OUTPUT_PATH = path.join(__dirname, '..', 'public', 'cards.json');
 
 // Extended accepted forms for verbs (lemma + common conjugations)
@@ -459,19 +465,50 @@ function parseCSV(content) {
   return content.split(/\r?\n/).filter(Boolean).map((line) => line.split(','));
 }
 
-function getPrompts(lemme) {
+function loadGenerated() {
+  try {
+    if (fs.existsSync(GENERATED_PATH)) {
+      const raw = fs.readFileSync(GENERATED_PATH, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn(`Warning: Could not load ${GENERATED_PATH}: ${e.message}`);
+  }
+  return {};
+}
+
+function getPrompts(lemme, generated) {
   const key = normalize(lemme);
+  // Priority 1: hand-crafted prompts (highest quality)
   if (FRENCH_BLANK_PROMPTS[key]) return FRENCH_BLANK_PROMPTS[key];
+  // Priority 2: LLM-generated prompts
+  if (generated[lemme] && generated[lemme].length > 0) return generated[lemme];
+  if (generated[key] && generated[key].length > 0) return generated[key];
+  // Priority 3: fallback placeholder
   return [{ sentence: `___`, hint: lemme, acceptedAnswers: [lemme] }];
 }
 
-function getAcceptedAnswers(lemme) {
-  const key = normalize(lemme);
-  if (VERB_FORMS[key]) return VERB_FORMS[key];
-  return [lemme, key];
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let count = 0; // 0 = all available
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--count' && i + 1 < args.length) {
+      count = parseInt(args[i + 1], 10);
+      if (isNaN(count) || count < 0) count = 0;
+    }
+  }
+  return { count };
 }
 
 function main() {
+  const { count } = parseArgs();
+
+  console.log('Loading LLM-generated cards...');
+  const generated = loadGenerated();
+  const genCount = Object.keys(generated).length;
+  console.log(`  ${genCount} lemmas from generated-cards.json`);
+  console.log(`  ${Object.keys(FRENCH_BLANK_PROMPTS).length} hand-crafted lemmas (override)`);
+
   const content = fs.readFileSync(CSV_PATH, 'utf8');
   const rows = parseCSV(content);
   const cards = [];
@@ -487,12 +524,26 @@ function main() {
       break;
     }
   }
-  for (let i = dataStart; i < Math.min(dataStart + 100, rows.length); i++) {
+
+  const maxRows = count > 0 ? Math.min(dataStart + count, rows.length) : rows.length;
+
+  let handcraftedUsed = 0;
+  let generatedUsed = 0;
+  let placeholderUsed = 0;
+
+  for (let i = dataStart; i < maxRows; i++) {
     const row = rows[i];
     const freq = parseInt(row[0], 10);
     const lemme = (row[1] || '').trim();
     if (!lemme || isNaN(freq)) continue;
-    const prompts = getPrompts(lemme);
+    const prompts = getPrompts(lemme, generated);
+
+    // Track source
+    const key = normalize(lemme);
+    if (FRENCH_BLANK_PROMPTS[key]) handcraftedUsed++;
+    else if ((generated[lemme] && generated[lemme].length > 0) || (generated[key] && generated[key].length > 0)) generatedUsed++;
+    else placeholderUsed++;
+
     cards.push({
       id: `card-${freq}`,
       french: lemme,
@@ -500,10 +551,12 @@ function main() {
       prompts,
     });
   }
+
   const outDir = path.dirname(OUTPUT_PATH);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(cards, null, 2), 'utf8');
-  console.log(`Wrote ${cards.length} cards to ${OUTPUT_PATH}`);
+  console.log(`\nWrote ${cards.length} cards to ${OUTPUT_PATH}`);
+  console.log(`  ${handcraftedUsed} hand-crafted, ${generatedUsed} LLM-generated, ${placeholderUsed} placeholders`);
 }
 
 main();
