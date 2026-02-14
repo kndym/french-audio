@@ -8,7 +8,7 @@
  */
 
 const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
-const MODEL = 'gemini-2.5-flash-native-audio-latest';
+const MODEL = 'gemini-2.5-flash-preview-native-audio-dialog';
 
 /**
  * @typedef {Object} GeminiLiveOptions
@@ -78,8 +78,9 @@ export class GeminiLiveClient {
     this.ws.onclose = (event) => {
       this._setupDone = false;
       if (event.code !== 1000) {
-        const reason = event.reason || `code ${event.code}`;
-        this.opts.onError?.(`Connection closed: ${reason}`);
+        const reason = event.reason || 'unknown reason';
+        this.opts.onError?.(`Connection closed (code ${event.code}): ${reason}`);
+        console.error(`[GeminiLive] WebSocket closed — code: ${event.code}, reason: ${reason}, wasClean: ${event.wasClean}`);
       }
       this.opts.onClose?.();
     };
