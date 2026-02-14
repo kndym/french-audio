@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getDueCards, processReview, classifyResult, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
+import { getDueCards, processReview, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
 
 const STORAGE_KEY = 'french-flashcards-progress';
 const DAILY_NEW_KEY = 'french-flashcards-daily-new';
@@ -86,21 +86,13 @@ function RecordButton({ onResult, disabled }) {
   );
 }
 
-/** Grade label + color based on classification */
-function gradeDisplay(grade) {
-  switch (grade) {
-    case 'know_fast':  return { label: 'Knew it!', color: 'var(--success)', icon: '⚡' };
-    case 'know_medium': return { label: 'Got it', color: 'var(--accent)', icon: '✓' };
-    case 'know_slow':  return { label: 'Slow but right', color: 'var(--warning)', icon: '⏱' };
-    case 'miss':       return { label: "Didn't know", color: 'var(--danger)', icon: '✗' };
-    default:           return { label: 'Reviewed', color: 'var(--text-muted)', icon: '·' };
-  }
-}
 
-function SettingsPanel({ progress, dailyNew, onImport, lastBackup }) {
+function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
   const [mergeMode, setMergeMode] = useState(true);
   const [toast, setToast] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const fileInputRef = useRef(null);
+  const resetTimerRef = useRef(null);
 
   const trackedCount = Object.keys(progress).length;
   const totalReviews = Object.values(progress).reduce((sum, p) => sum + (p.attempts || p.reps || 0), 0);
@@ -297,13 +289,53 @@ function SettingsPanel({ progress, dailyNew, onImport, lastBackup }) {
         />
         Merge on import (keep best progress per card)
       </label>
+
+      {/* Advanced */}
+      <div style={{ borderTop: '1px solid var(--surface-hover)', paddingTop: '1rem', marginTop: '0.25rem' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Advanced
+        </p>
+        <button
+          onClick={() => {
+            if (confirmReset) {
+              // Second tap: actually reset
+              clearTimeout(resetTimerRef.current);
+              setConfirmReset(false);
+              localStorage.removeItem(STORAGE_KEY);
+              localStorage.removeItem(DAILY_NEW_KEY);
+              localStorage.removeItem(BACKUP_KEY);
+              onReset();
+              showToast('All progress has been reset');
+            } else {
+              // First tap: ask for confirmation
+              setConfirmReset(true);
+              resetTimerRef.current = setTimeout(() => setConfirmReset(false), 3000);
+            }
+          }}
+          style={{
+            width: '100%',
+            padding: '0.65rem',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            background: confirmReset ? 'var(--danger)' : 'var(--surface-hover)',
+            color: confirmReset ? 'white' : 'var(--danger)',
+            borderRadius: 'var(--radius-sm)',
+            transition: 'background 0.2s, color 0.2s',
+          }}
+        >
+          {confirmReset ? 'Tap again to confirm' : 'Reset All Progress'}
+        </button>
+      </div>
     </div>
   );
 }
 
 function CardView({ card, onResult }) {
   const [promptIndex] = useState(() => Math.floor(Math.random() * card.prompts.length));
-  const [transcript, setTranscript] = useState(null);
+  // phase: 'attempt' -> 'reveal'  (done via onResult)
+  const [phase, setPhase] = useState('attempt');
+  const [transcript, setTranscript] = useState(null); // null = not recorded, string = recorded
+  const [gaveUp, setGaveUp] = useState(false);
   const startTimeRef = useRef(Date.now());
   const responseTimeRef = useRef(null);
 
@@ -315,28 +347,20 @@ function CardView({ card, onResult }) {
   const handleSpeechResult = useCallback((text) => {
     responseTimeRef.current = Date.now() - startTimeRef.current;
     setTranscript(text);
+    setPhase('reveal');
   }, []);
 
-  const correct = transcript !== null && matchesAnswer(transcript, acceptedAnswers);
+  const handleDontKnow = useCallback(() => {
+    responseTimeRef.current = Date.now() - startTimeRef.current;
+    setGaveUp(true);
+    setPhase('reveal');
+  }, []);
+
   const responseMs = responseTimeRef.current;
-  const grade = transcript !== null ? classifyResult(correct, responseMs) : null;
-  const display = grade ? gradeDisplay(grade) : null;
 
-  const handleNext = useCallback(() => {
-    onResult({ correct, responseMs });
-  }, [onResult, correct, responseMs]);
-
-  return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: '420px',
-        background: 'var(--surface)',
-        borderRadius: 'var(--radius)',
-        padding: '1.5rem',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-      }}
-    >
+  // Prompt display (shared between phases)
+  const promptBlock = (
+    <>
       <p
         style={{
           fontSize: '0.85rem',
@@ -381,68 +405,117 @@ function CardView({ card, onResult }) {
           [{displayPrompt.hint}]
         </p>
       )}
+    </>
+  );
 
-      {transcript === null ? (
-        <RecordButton onResult={handleSpeechResult} />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Grade banner */}
-          <div
+  return (
+    <div
+      style={{
+        width: '100%',
+        maxWidth: '420px',
+        background: 'var(--surface)',
+        borderRadius: 'var(--radius)',
+        padding: '1.5rem',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+      }}
+    >
+      {promptBlock}
+
+      {phase === 'attempt' && (
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            onClick={handleDontKnow}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.75rem 1rem',
-              borderRadius: 'var(--radius-sm)',
-              background: display.color,
-              color: 'white',
+              flex: 1,
+              padding: '0.85rem',
+              fontSize: '1rem',
               fontWeight: 600,
-              fontSize: '1.1rem',
+              background: 'var(--danger)',
+              color: 'white',
+              borderRadius: 'var(--radius-sm)',
             }}
           >
-            <span style={{ fontSize: '1.3rem' }}>{display.icon}</span>
-            <span>{display.label}</span>
-            <span style={{ marginLeft: 'auto', fontSize: '0.85rem', opacity: 0.85 }}>
-              {(responseMs / 1000).toFixed(1)}s
-            </span>
+            I don't know
+          </button>
+          <div style={{ flex: 1 }}>
+            <RecordButton onResult={handleSpeechResult} />
           </div>
+        </div>
+      )}
 
-          {/* What you said */}
-          <div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-              You said
-            </p>
-            <p style={{ fontSize: '1.1rem' }}>"{transcript}"</p>
-          </div>
+      {phase === 'reveal' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* What you said (only if they recorded) */}
+          {transcript !== null && (
+            <div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                You said
+              </p>
+              <p style={{ fontSize: '1.1rem' }}>"{transcript}"</p>
+            </div>
+          )}
 
           {/* Accepted answers */}
           <div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-              Accepted
+              Answer
             </p>
-            <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: '1.15rem', fontWeight: 600 }}>
               {acceptedAnswers.length > 2
                 ? `${card.french} (inf.) · ${acceptedAnswers.slice(0, 10).join(', ')}${acceptedAnswers.length > 10 ? '...' : ''}`
                 : acceptedAnswers.join(', ')}
             </p>
           </div>
 
-          {/* Next button */}
-          <button
-            onClick={handleNext}
-            style={{
-              width: '100%',
-              padding: '0.85rem',
-              fontSize: '1.1rem',
-              fontWeight: 600,
-              background: 'var(--accent)',
-              color: 'white',
-              borderRadius: 'var(--radius-sm)',
-              marginTop: '0.25rem',
-            }}
-          >
-            Next →
-          </button>
+          {/* Self-grade or Next (if gave up) */}
+          {gaveUp ? (
+            <button
+              onClick={() => onResult({ correct: false, responseMs })}
+              style={{
+                width: '100%',
+                padding: '0.85rem',
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                background: 'var(--accent)',
+                color: 'white',
+                borderRadius: 'var(--radius-sm)',
+                marginTop: '0.25rem',
+              }}
+            >
+              Next →
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+              <button
+                onClick={() => onResult({ correct: false, responseMs })}
+                style={{
+                  flex: 1,
+                  padding: '0.85rem',
+                  fontSize: '1.05rem',
+                  fontWeight: 600,
+                  background: 'var(--danger)',
+                  color: 'white',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+              >
+                Missed it
+              </button>
+              <button
+                onClick={() => onResult({ correct: true, responseMs })}
+                style={{
+                  flex: 1,
+                  padding: '0.85rem',
+                  fontSize: '1.05rem',
+                  fontWeight: 600,
+                  background: 'var(--success)',
+                  color: 'white',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+              >
+                Got it
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -533,6 +606,13 @@ export default function App() {
     }
   }, []);
 
+  const handleReset = useCallback(() => {
+    setProgress({});
+    setDailyNew({ date: getTodayKey(), count: 0 });
+    setTodayCount(0);
+    setLastBackup(null);
+  }, []);
+
   // Keep lastBackup in sync when localStorage changes (after export)
   useEffect(() => {
     const check = () => {
@@ -607,6 +687,7 @@ export default function App() {
           progress={progress}
           dailyNew={dailyNew}
           onImport={handleImport}
+          onReset={handleReset}
           lastBackup={lastBackup}
         />
       )}

@@ -5,8 +5,8 @@
  */
 
 // Thresholds (ms) for speed classification
-const FAST_MS = 2500;
-const MEDIUM_MS = 6000;
+const FAST_MS = 5000;
+const MEDIUM_MS = 10000;
 
 // Scheduling intervals (days)
 const KNOWN_FAST_INTERVAL = 7;       // correct + fast on first see → skip far ahead
