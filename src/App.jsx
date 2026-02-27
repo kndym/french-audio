@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getDueCards, processReview, getCardState, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
 import ConversationView from './ConversationView';
-import { computeTrends } from './session-analytics';
+import { computeTrends, getSessions } from './session-analytics';
 import { unlockApiKey } from './crypto';
+import { generateDailyToken, GAME_SITE_URL } from './gameToken';
 
 const STORAGE_KEY = 'french-flashcards-progress';
 const DAILY_NEW_KEY = 'french-flashcards-daily-new';
@@ -1213,6 +1214,98 @@ function CardView({ card, onResult }) {
   );
 }
 
+// ── Game unlock helpers ────────────────────────────────────────
+
+function isWeekendDay() {
+  const d = new Date().getDay();
+  return d === 0 || d === 6;
+}
+
+function hasConvoToday() {
+  const sessions = getSessions();
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return sessions.some(
+    (s) => s.timestamp >= start.getTime() && (s.metrics?.durationMin || 0) >= 5,
+  );
+}
+
+function computeUnlockStatus(due) {
+  if (due.length > 0) return { ok: false, reason: 'cards' };
+  if (isWeekendDay() && !hasConvoToday()) return { ok: false, reason: 'convo' };
+  return { ok: true };
+}
+
+function RewardScreen({ unlockStatus }) {
+  const [launching, setLaunching] = useState(false);
+
+  async function handlePlay() {
+    setLaunching(true);
+    const token = await generateDailyToken();
+    window.location.href = `${GAME_SITE_URL}/?token=${token}`;
+  }
+
+  const cardStyle = {
+    background: 'var(--surface)',
+    borderRadius: 'var(--radius)',
+    padding: '2.5rem 2rem',
+    textAlign: 'center',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.5rem',
+  };
+
+  if (unlockStatus.reason === 'cards') {
+    return (
+      <div style={cardStyle}>
+        <p style={{ fontSize: '2rem', margin: 0 }}>📚</p>
+        <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Not yet!</p>
+        <p style={{ color: 'var(--text-muted)', margin: 0 }}>Finish today's cards to unlock the game.</p>
+      </div>
+    );
+  }
+
+  if (unlockStatus.reason === 'convo') {
+    return (
+      <div style={cardStyle}>
+        <p style={{ fontSize: '2rem', margin: 0 }}>💬</p>
+        <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Almost there!</p>
+        <p style={{ color: 'var(--text-muted)', margin: 0 }}>Complete a 5-minute conversation to unlock the game.</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, opacity: 0.7 }}>It's the weekend — earn it.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={cardStyle}>
+      <p style={{ fontSize: '2rem', margin: 0 }}>🎉</p>
+      <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>You earned it!</p>
+      <p style={{ color: 'var(--text-muted)', margin: 0 }}>All done for today.</p>
+      <button
+        onClick={handlePlay}
+        disabled={launching}
+        style={{
+          marginTop: '1rem',
+          padding: '0.75rem 2rem',
+          fontSize: '1rem',
+          fontWeight: 700,
+          background: launching ? 'var(--surface-hover)' : 'var(--accent)',
+          color: '#fff',
+          borderRadius: 'var(--radius)',
+          cursor: launching ? 'not-allowed' : 'pointer',
+          transition: 'background 0.2s',
+        }}
+      >
+        {launching ? 'Launching...' : 'Play Flappy Bird →'}
+      </button>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+
 export default function App() {
   const [cards, setCards] = useState([]);
   const [progress, setProgress] = useState({});
@@ -1269,6 +1362,7 @@ export default function App() {
 
   const due = getDueCards(cards, progress, dailyNew, DEFAULT_MAX_NEW_PER_DAY);
   const current = due[0];
+  const unlockStatus = computeUnlockStatus(due);
 
   const handleResult = useCallback(
     ({ correct, responseMs }) => {
@@ -1416,6 +1510,21 @@ export default function App() {
           >
             {view === 'settings' ? '✕' : '⚙'}
           </button>
+          <button
+            onClick={() => setView((v) => v === 'reward' ? 'study' : 'reward')}
+            aria-label="Game"
+            style={{
+              background: view === 'reward' ? 'var(--surface-hover)' : 'transparent',
+              color: 'var(--text-muted)',
+              fontSize: '1.15rem',
+              padding: '0.25rem 0.45rem',
+              borderRadius: 'var(--radius-sm)',
+              lineHeight: 1,
+              transition: 'background 0.2s',
+            }}
+          >
+            {view === 'reward' ? '✕' : '🎮'}
+          </button>
         </div>
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
           {learnedCount} learned · {knownOnSightCount > 0 ? `${knownOnSightCount} already known · ` : ''}{newCount} new · {newToday}/{DEFAULT_MAX_NEW_PER_DAY} new today · {todayCount} reviews
@@ -1465,6 +1574,10 @@ export default function App() {
             </p>
           </div>
         )
+      )}
+
+      {view === 'reward' && (
+        <RewardScreen unlockStatus={unlockStatus} />
       )}
     </div>
   );
