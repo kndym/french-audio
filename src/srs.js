@@ -62,7 +62,8 @@ export function classifyResult(correct, responseMs) {
 export function getDueCards(cards, progress, dailyNewCount = null, maxNewPerDay = DEFAULT_MAX_NEW_PER_DAY) {
   const now = Date.now();
   const today = getTodayKey();
-  const due = [];
+  const available = [];   // ready now: new cards + anything whose nextReview <= now
+  const unavailable = []; // seen recently: learning/relearning, nextReview still in future
   let newCardCount = 0;
   const newAlreadyToday = (dailyNewCount && dailyNewCount.date === today) ? dailyNewCount.count : 0;
 
@@ -70,16 +71,30 @@ export function getDueCards(cards, progress, dailyNewCount = null, maxNewPerDay 
     const p = getCardState(progress, card.id);
     if (p.state === STATE.NEW) {
       if (newAlreadyToday + newCardCount < maxNewPerDay) {
-        due.push({ ...card, progress: p, due: 0 });
+        available.push({ ...card, progress: p, due: 0 });
         newCardCount++;
       }
     } else if (p.state === STATE.LEARNING || p.state === STATE.RELEARNING) {
-      if (p.nextReview <= now) due.push({ ...card, progress: p, due: p.nextReview });
+      if (p.nextReview <= now) {
+        available.push({ ...card, progress: p, due: p.nextReview });
+      } else {
+        unavailable.push({ ...card, progress: p, due: p.nextReview });
+      }
     } else if (p.state === STATE.REVIEW && p.nextReview <= now) {
-      due.push({ ...card, progress: p, due: p.nextReview });
+      available.push({ ...card, progress: p, due: p.nextReview });
     }
   }
-  return due.sort((a, b) => a.due - b.due);
+
+  // Shuffle available cards
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+
+  // Unavailable go last, oldest (soonest to become available) first
+  unavailable.sort((a, b) => a.due - b.due);
+
+  return [...available, ...unavailable];
 }
 
 /**
