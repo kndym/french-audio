@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getDueCards, processReview, getCardState, STATE, DEFAULT_MAX_NEW_PER_DAY, getTodayKey } from './srs';
+import { getDueCards, processReview, getCardState, STATE, DEFAULT_MAX_NEW_PER_DAY, DEFAULT_MAX_REVIEWS_PER_DAY, getTodayKey } from './srs';
 import ConversationView from './ConversationView';
 import { computeTrends, getSessions } from './session-analytics';
 import { unlockApiKey } from './crypto';
@@ -7,6 +7,7 @@ import { generateDailyToken, GAME_SITE_URL } from './gameToken';
 
 const STORAGE_KEY = 'french-flashcards-progress';
 const DAILY_NEW_KEY = 'french-flashcards-daily-new';
+const DAILY_REVIEWS_KEY = 'french-flashcards-daily-reviews';
 const BACKUP_KEY = 'french-flashcards-last-backup';
 const API_KEY_STORAGE = 'french-gemini-api-key';
 const STRUGGLED_WORDS_KEY = 'french-conversation-struggled';
@@ -484,6 +485,7 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
               setConfirmReset(false);
               localStorage.removeItem(STORAGE_KEY);
               localStorage.removeItem(DAILY_NEW_KEY);
+              localStorage.removeItem(DAILY_REVIEWS_KEY);
               localStorage.removeItem(BACKUP_KEY);
               onReset();
               showToast('All progress has been reset');
@@ -1350,6 +1352,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [todayCount, setTodayCount] = useState(0);
   const [dailyNew, setDailyNew] = useState({ date: getTodayKey(), count: 0 });
+  const [dailyReviews, setDailyReviews] = useState(() => {
+    try {
+      const raw = localStorage.getItem(DAILY_REVIEWS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.date === getTodayKey()) return parsed;
+      }
+    } catch { }
+    return { date: getTodayKey(), count: 0 };
+  });
   const [view, setView] = useState('study'); // 'study' | 'settings' | 'dashboard' | 'conversation'
   const [lastBackup, setLastBackup] = useState(() => {
     try { return localStorage.getItem(BACKUP_KEY) || null; } catch { return null; }
@@ -1401,7 +1413,11 @@ export default function App() {
     localStorage.setItem(DAILY_NEW_KEY, JSON.stringify(dailyNew));
   }, [dailyNew]);
 
-  const due = getDueCards(cards, progress, dailyNew, DEFAULT_MAX_NEW_PER_DAY);
+  useEffect(() => {
+    localStorage.setItem(DAILY_REVIEWS_KEY, JSON.stringify(dailyReviews));
+  }, [dailyReviews]);
+
+  const due = getDueCards(cards, progress, dailyNew, DEFAULT_MAX_NEW_PER_DAY, dailyReviews, DEFAULT_MAX_REVIEWS_PER_DAY);
   const current = due[0];
   const unlockStatus = computeUnlockStatus(due);
 
@@ -1409,6 +1425,7 @@ export default function App() {
     ({ correct, responseMs }) => {
       if (!current) return;
       const wasNew = current.progress && current.progress.state === STATE.NEW;
+      const wasReview = current.progress && current.progress.state === STATE.REVIEW;
       const result = processReview(progress, current.id, correct, responseMs);
 
       setProgress(result.progress);
@@ -1423,6 +1440,15 @@ export default function App() {
           if (prev.date === today) {
             return { date: today, count: prev.count + 1 };
           }
+          return { date: today, count: 1 };
+        });
+      }
+
+      // Increment daily review counter for REVIEW-state cards (drives the daily cap)
+      if (wasReview) {
+        setDailyReviews((prev) => {
+          const today = getTodayKey();
+          if (prev.date === today) return { date: today, count: prev.count + 1 };
           return { date: today, count: 1 };
         });
       }
@@ -1443,6 +1469,7 @@ export default function App() {
   const handleReset = useCallback(() => {
     setProgress({});
     setDailyNew({ date: getTodayKey(), count: 0 });
+    setDailyReviews({ date: getTodayKey(), count: 0 });
     setTodayCount(0);
     setLastBackup(null);
   }, []);
@@ -1491,6 +1518,12 @@ export default function App() {
   const knownOnSightCount = cards.filter((c) => progress[c.id] && progress[c.id].knownOnSight).length;
   const newToday = dailyNew.date === getTodayKey() ? dailyNew.count : 0;
   const newRemaining = Math.max(0, DEFAULT_MAX_NEW_PER_DAY - newToday);
+  const reviewsDoneToday = dailyReviews.date === getTodayKey() ? dailyReviews.count : 0;
+  const now = Date.now();
+  const reviewBacklog = cards.filter((c) => {
+    const p = progress[c.id];
+    return p && p.state === STATE.REVIEW && p.nextReview <= now;
+  }).length;
 
   return (
     <div
@@ -1570,7 +1603,10 @@ export default function App() {
           </button>
         </div>
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-          {learnedCount} learned · {knownOnSightCount > 0 ? `${knownOnSightCount} already known · ` : ''}{newCount} new · {newToday}/{DEFAULT_MAX_NEW_PER_DAY} new today · {todayCount} reviews
+          {learnedCount} learned · {knownOnSightCount > 0 ? `${knownOnSightCount} already known · ` : ''}{newCount} new ·{' '}
+          {reviewBacklog > 0
+            ? `${reviewsDoneToday}/${DEFAULT_MAX_REVIEWS_PER_DAY} reviews today · ${reviewBacklog} backlog`
+            : `${newToday}/${DEFAULT_MAX_NEW_PER_DAY} new today · ${todayCount} reviews`}
         </p>
         {(() => {
           const total = todayCount + due.length;
@@ -1644,9 +1680,11 @@ export default function App() {
           >
             <p style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>All done for now!</p>
             <p style={{ color: 'var(--text-muted)' }}>
-              {newRemaining > 0 && newCount > 0
-                ? `${newRemaining} new cards remaining today. No reviews due right now.`
-                : 'No cards due today. Come back tomorrow for more reviews.'}
+              {reviewBacklog > 0
+                ? `Daily review limit reached (${DEFAULT_MAX_REVIEWS_PER_DAY}/day). ${reviewBacklog} reviews still in backlog — come back tomorrow.`
+                : newRemaining > 0 && newCount > 0
+                  ? `${newRemaining} new cards remaining today. No reviews due right now.`
+                  : 'No cards due today. Come back tomorrow for more reviews.'}
             </p>
           </div>
         )

@@ -24,6 +24,7 @@ const EASE_PENALTY_WRONG = -0.2;
 
 export const STATE = { NEW: 'new', LEARNING: 'learning', REVIEW: 'review', RELEARNING: 'relearning' };
 export const DEFAULT_MAX_NEW_PER_DAY = 50;
+export const DEFAULT_MAX_REVIEWS_PER_DAY = 100;
 
 export function getCardState(progress, cardId) {
   return progress[cardId] || {
@@ -58,32 +59,55 @@ export function classifyResult(correct, responseMs) {
 
 /**
  * Get cards that are due for review.
+ * - Caps daily review cards at maxReviewsPerDay (oldest-due first).
+ * - Blocks new cards entirely while any REVIEW backlog exists.
  */
-export function getDueCards(cards, progress, dailyNewCount = null, maxNewPerDay = DEFAULT_MAX_NEW_PER_DAY) {
+export function getDueCards(
+  cards, progress,
+  dailyNewCount = null, maxNewPerDay = DEFAULT_MAX_NEW_PER_DAY,
+  dailyReviewCount = null, maxReviewsPerDay = DEFAULT_MAX_REVIEWS_PER_DAY,
+) {
   const now = Date.now();
   const today = getTodayKey();
-  const available = [];   // ready now: new cards + anything whose nextReview <= now
-  const unavailable = []; // seen recently: learning/relearning, nextReview still in future
-  let newCardCount = 0;
   const newAlreadyToday = (dailyNewCount && dailyNewCount.date === today) ? dailyNewCount.count : 0;
+  const reviewsDoneToday = (dailyReviewCount && dailyReviewCount.date === today) ? dailyReviewCount.count : 0;
+  const reviewsRemainingToday = Math.max(0, maxReviewsPerDay - reviewsDoneToday);
+
+  const dueReviews = [];
+  const learningAvailable = [];
+  const unavailable = [];
+  let newCardCount = 0;
 
   for (const card of cards) {
     const p = getCardState(progress, card.id);
-    if (p.state === STATE.NEW) {
-      if (newAlreadyToday + newCardCount < maxNewPerDay) {
-        available.push({ ...card, progress: p, due: 0 });
-        newCardCount++;
-      }
+    if (p.state === STATE.REVIEW && p.nextReview <= now) {
+      dueReviews.push({ ...card, progress: p, due: p.nextReview });
     } else if (p.state === STATE.LEARNING || p.state === STATE.RELEARNING) {
       if (p.nextReview <= now) {
-        available.push({ ...card, progress: p, due: p.nextReview });
+        learningAvailable.push({ ...card, progress: p, due: p.nextReview });
       } else {
         unavailable.push({ ...card, progress: p, due: p.nextReview });
       }
-    } else if (p.state === STATE.REVIEW && p.nextReview <= now) {
-      available.push({ ...card, progress: p, due: p.nextReview });
     }
   }
+
+  // Prioritise oldest-overdue reviews, then apply daily cap
+  dueReviews.sort((a, b) => a.due - b.due);
+  const cappedReviews = dueReviews.slice(0, reviewsRemainingToday);
+
+  // No new cards while any review backlog exists
+  const newCards = [];
+  if (dueReviews.length === 0) {
+    for (const card of cards) {
+      const p = getCardState(progress, card.id);
+      if (p.state === STATE.NEW && newAlreadyToday + newCardCount < maxNewPerDay) {
+        newCards.push({ ...card, progress: p, due: 0 });
+        newCardCount++;
+      }
+    }
+  }
+
+  const available = [...cappedReviews, ...newCards, ...learningAvailable];
 
   // Shuffle available cards
   for (let i = available.length - 1; i > 0; i--) {
