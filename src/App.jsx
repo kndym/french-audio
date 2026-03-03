@@ -1572,14 +1572,15 @@ export default function App() {
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
           {learnedCount} learned · {knownOnSightCount > 0 ? `${knownOnSightCount} already known · ` : ''}{newCount} new · {newToday}/{DEFAULT_MAX_NEW_PER_DAY} new today · {todayCount} reviews
         </p>
-        {cards.length > 0 && (() => {
-          const seen = Object.keys(progress).length;
-          const pct = Math.min(100, Math.round(seen / cards.length * 100));
+        {(() => {
+          const total = todayCount + due.length;
+          if (total === 0) return null;
+          const pct = Math.round(todayCount / total * 100);
           return (
             <div style={{ width: '100%', marginTop: '0.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.2rem' }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Deck progress</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{seen} / {cards.length} · {pct}%</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Today's cards</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{todayCount} / {total} · {pct}%</span>
               </div>
               <div style={{ width: '100%', height: '5px', background: 'var(--surface)', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: '3px', transition: 'width 0.4s ease' }} />
