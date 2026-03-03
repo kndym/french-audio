@@ -11,6 +11,8 @@ const BACKUP_KEY = 'french-flashcards-last-backup';
 const API_KEY_STORAGE = 'french-gemini-api-key';
 const STRUGGLED_WORDS_KEY = 'french-conversation-struggled';
 const BACKUP_VERSION = 1;
+const MILESTONES_KEY = 'completedMilestones';
+const DECK_COMPLETE_KEY = 'deckComplete';
 
 function normalize(text) {
   return (text || '')
@@ -1230,6 +1232,42 @@ function hasConvoToday() {
   );
 }
 
+/**
+ * Check if a new 10% milestone has been crossed after a card rating.
+ * Fires each milestone only once (stored in localStorage under 'completedMilestones').
+ * - 10%–90%: navigates to a Shortcuts URL (iOS Health logging).
+ * - 100%: sets 'deckComplete' in localStorage instead.
+ */
+function checkMilestones(updatedProgress, totalCards) {
+  if (totalCards === 0) return;
+
+  const seenCards = Object.keys(updatedProgress).length;
+  const pct = seenCards / totalCards;
+
+  let completed;
+  try {
+    completed = JSON.parse(localStorage.getItem(MILESTONES_KEY) || '[]');
+    if (!Array.isArray(completed)) completed = [];
+  } catch {
+    completed = [];
+  }
+
+  const milestones = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  for (const m of milestones) {
+    if (pct >= m / 100 && !completed.includes(m)) {
+      completed.push(m);
+      localStorage.setItem(MILESTONES_KEY, JSON.stringify(completed));
+
+      if (m === 100) {
+        localStorage.setItem(DECK_COMPLETE_KEY, 'true');
+      } else {
+        window.location.href = `shortcuts://run-shortcut?name=French%20${m}%25&input=${m}`;
+      }
+      break; // fire at most one milestone per rating
+    }
+  }
+}
+
 function computeUnlockStatus(due) {
   if (due.length > 0) return { ok: false, reason: 'cards' };
   if (isWeekendDay() && !hasConvoToday()) return { ok: false, reason: 'convo' };
@@ -1322,6 +1360,9 @@ export default function App() {
       return raw ? JSON.parse(raw) : [];
     } catch { return []; }
   });
+  const [deckComplete, setDeckComplete] = useState(() => {
+    try { return localStorage.getItem(DECK_COMPLETE_KEY) === 'true'; } catch { return false; }
+  });
 
   useEffect(() => {
     fetch('/cards.json')
@@ -1372,6 +1413,8 @@ export default function App() {
 
       setProgress(result.progress);
       setTodayCount((c) => c + 1);
+      checkMilestones(result.progress, cards.length);
+      if (localStorage.getItem(DECK_COMPLETE_KEY) === 'true') setDeckComplete(true);
 
       // Only increment daily new counter if it was a NEW card AND not known-on-sight
       if (wasNew && !result.knownOnSight) {
@@ -1529,7 +1572,39 @@ export default function App() {
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
           {learnedCount} learned · {knownOnSightCount > 0 ? `${knownOnSightCount} already known · ` : ''}{newCount} new · {newToday}/{DEFAULT_MAX_NEW_PER_DAY} new today · {todayCount} reviews
         </p>
+        {cards.length > 0 && (() => {
+          const seen = Object.keys(progress).length;
+          const pct = Math.min(100, Math.round(seen / cards.length * 100));
+          return (
+            <div style={{ width: '100%', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.2rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Deck progress</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{seen} / {cards.length} · {pct}%</span>
+              </div>
+              <div style={{ width: '100%', height: '5px', background: 'var(--surface)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: '3px', transition: 'width 0.4s ease' }} />
+              </div>
+            </div>
+          );
+        })()}
       </header>
+
+      {deckComplete && (
+        <div
+          style={{
+            background: '#1a3a1a',
+            border: '1px solid #4caf50',
+            borderRadius: 'var(--radius)',
+            padding: '1rem 1.5rem',
+            textAlign: 'center',
+            width: '100%',
+            color: '#a5d6a7',
+          }}
+        >
+          <p style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.25rem' }}>🎉 Deck complete!</p>
+          <p style={{ margin: 0, fontSize: '0.9rem' }}>You've seen every card at least once. Impressive!</p>
+        </div>
+      )}
 
       {view === 'settings' && (
         <SettingsPanel
