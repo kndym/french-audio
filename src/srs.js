@@ -59,7 +59,7 @@ export function classifyResult(correct, responseMs) {
 
 /**
  * Get cards that are due for review.
- * - Caps daily review cards at maxReviewsPerDay (oldest-due first).
+ * - Caps total daily cards (learning + reviews) at maxReviewsPerDay.
  * - Blocks new cards entirely while any REVIEW backlog exists.
  */
 export function getDueCards(
@@ -91,13 +91,16 @@ export function getDueCards(
     }
   }
 
-  // Prioritise oldest-overdue reviews, then apply daily cap
+  // Learning/relearning cards get priority; cap total (learning + reviews) to maxReviewsPerDay
+  const cappedLearning = learningAvailable.slice(0, reviewsRemainingToday);
+  const reviewSlotsRemaining = Math.max(0, reviewsRemainingToday - cappedLearning.length);
+
   dueReviews.sort((a, b) => a.due - b.due);
-  const cappedReviews = dueReviews.slice(0, reviewsRemainingToday);
+  const cappedReviews = dueReviews.slice(0, reviewSlotsRemaining);
 
   // No new cards while any review backlog exists
   const newCards = [];
-  if (dueReviews.length === 0) {
+  if (dueReviews.length === 0 && cappedLearning.length === learningAvailable.length) {
     for (const card of cards) {
       const p = getCardState(progress, card.id);
       if (p.state === STATE.NEW && newAlreadyToday + newCardCount < maxNewPerDay) {
@@ -107,7 +110,7 @@ export function getDueCards(
     }
   }
 
-  const available = [...cappedReviews, ...newCards, ...learningAvailable];
+  const available = [...cappedReviews, ...newCards, ...cappedLearning];
 
   // Shuffle available cards
   for (let i = available.length - 1; i > 0; i--) {
