@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getDueCards, processReview, getCardState, STATE, DEFAULT_MAX_NEW_PER_DAY, DEFAULT_MAX_REVIEWS_PER_DAY, getTodayKey } from './srs';
 import ConversationView from './ConversationView';
-import { computeTrends, getSessions } from './session-analytics';
+import { computeTrends } from './session-analytics';
 import { unlockApiKey } from './crypto';
-import { generateDailyToken, GAME_SITE_URL } from './gameToken';
 
 const STORAGE_KEY = 'french-flashcards-progress';
 const DAILY_NEW_KEY = 'french-flashcards-daily-new';
@@ -12,8 +11,9 @@ const BACKUP_KEY = 'french-flashcards-last-backup';
 const API_KEY_STORAGE = 'french-gemini-api-key';
 const STRUGGLED_WORDS_KEY = 'french-conversation-struggled';
 const BACKUP_VERSION = 1;
-const MILESTONES_KEY = 'completedMilestones';
+const FIRED_MILESTONES_KEY = 'firedMilestones';
 const DECK_COMPLETE_KEY = 'deckComplete';
+const LAST_RESET_KEY = 'lastResetDate';
 
 function normalize(text) {
   return (text || '')
@@ -1218,130 +1218,82 @@ function CardView({ card, onResult }) {
   );
 }
 
-// ── Game unlock helpers ────────────────────────────────────────
+// ── Milestone / unlock helpers ─────────────────────────────────
 
-function isWeekendDay() {
-  const d = new Date().getDay();
-  return d === 0 || d === 6;
-}
+/**
+ * Returns the most recent 4am Eastern Time as a UTC Date.
+ * Used as the daily reset boundary.
+ */
+function getMostRecent4amEasternUTC() {
+  const tz = 'America/New_York';
+  const now = new Date();
 
-function hasConvoToday() {
-  const sessions = getSessions();
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  return sessions.some(
-    (s) => s.timestamp >= start.getTime() && (s.metrics?.durationMin || 0) >= 5,
-  );
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+
+  for (const utcHour of [8, 9]) {
+    const candidate = new Date(`${ymd}T${String(utcHour).padStart(2, '0')}:00:00Z`);
+    const h = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hour: '2-digit', hour12: false,
+    }).format(candidate));
+    if (h === 4) {
+      // If today's 4am is in the future, use yesterday's 4am
+      if (candidate > now) {
+        return new Date(candidate.getTime() - 24 * 3600 * 1000);
+      }
+      return candidate;
+    }
+  }
+  return new Date(0);
 }
 
 /**
- * Check if a new 10% milestone has been crossed after a card rating.
- * Fires each milestone only once (stored in localStorage under 'completedMilestones').
- * - 10%–90%: navigates to a Shortcuts URL (iOS Health logging).
- * - 100%: sets 'deckComplete' in localStorage instead.
+ * After each card rating, fire any newly-crossed 10% milestones via the
+ * unlock API (each fired only once per daily reset cycle).
+ * At 100%, posts an unlock_until_4am credit and sets the deckComplete state.
  */
-function checkMilestones(updatedProgress, totalCards) {
+async function checkAndFireMilestones(updatedProgress, totalCards, setDeckComplete) {
   if (totalCards === 0) return;
 
-  const seenCards = Object.keys(updatedProgress).length;
-  const pct = seenCards / totalCards;
+  const seenCount = Object.keys(updatedProgress).length;
+  const pct = seenCount / totalCards * 100;
+  const secret = import.meta.env.VITE_UNLOCK_SECRET;
 
-  let completed;
+  let fired;
   try {
-    completed = JSON.parse(localStorage.getItem(MILESTONES_KEY) || '[]');
-    if (!Array.isArray(completed)) completed = [];
+    fired = JSON.parse(localStorage.getItem(FIRED_MILESTONES_KEY) || '[]');
+    if (!Array.isArray(fired)) fired = [];
   } catch {
-    completed = [];
+    fired = [];
   }
 
-  const milestones = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-  for (const m of milestones) {
-    if (pct >= m / 100 && !completed.includes(m)) {
-      completed.push(m);
-      localStorage.setItem(MILESTONES_KEY, JSON.stringify(completed));
-
-      if (m === 100) {
-        localStorage.setItem(DECK_COMPLETE_KEY, 'true');
-      } else {
-        window.location.href = `shortcuts://run-shortcut?name=French%20${m}%25&input=${m}`;
-      }
+  for (const m of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+    if (pct >= m && !fired.includes(m)) {
+      try {
+        await fetch('/api/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
+          body: JSON.stringify({ source: 'french', minutes: 5 }),
+        });
+      } catch { /* ignore network errors */ }
+      fired.push(m);
+      localStorage.setItem(FIRED_MILESTONES_KEY, JSON.stringify(fired));
       break; // fire at most one milestone per rating
     }
   }
-}
 
-function computeUnlockStatus(due) {
-  if (due.length > 0) return { ok: false, reason: 'cards' };
-  if (isWeekendDay() && !hasConvoToday()) return { ok: false, reason: 'convo' };
-  return { ok: true };
-}
-
-function RewardScreen({ unlockStatus }) {
-  const [launching, setLaunching] = useState(false);
-
-  async function handlePlay() {
-    setLaunching(true);
-    const token = await generateDailyToken();
-    window.location.href = `${GAME_SITE_URL}/?token=${token}`;
+  if (pct >= 100 && !localStorage.getItem(DECK_COMPLETE_KEY)) {
+    try {
+      await fetch('/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
+        body: JSON.stringify({ source: 'french', unlock_until_4am: true }),
+      });
+    } catch { /* ignore network errors */ }
+    localStorage.setItem(DECK_COMPLETE_KEY, 'true');
+    setDeckComplete(true);
   }
-
-  const cardStyle = {
-    background: 'var(--surface)',
-    borderRadius: 'var(--radius)',
-    padding: '2.5rem 2rem',
-    textAlign: 'center',
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '0.5rem',
-  };
-
-  if (unlockStatus.reason === 'cards') {
-    return (
-      <div style={cardStyle}>
-        <p style={{ fontSize: '2rem', margin: 0 }}>📚</p>
-        <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Not yet!</p>
-        <p style={{ color: 'var(--text-muted)', margin: 0 }}>Finish today's cards to unlock the game.</p>
-      </div>
-    );
-  }
-
-  if (unlockStatus.reason === 'convo') {
-    return (
-      <div style={cardStyle}>
-        <p style={{ fontSize: '2rem', margin: 0 }}>💬</p>
-        <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Almost there!</p>
-        <p style={{ color: 'var(--text-muted)', margin: 0 }}>Complete a 5-minute conversation to unlock the game.</p>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, opacity: 0.7 }}>It's the weekend — earn it.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div style={cardStyle}>
-      <p style={{ fontSize: '2rem', margin: 0 }}>🎉</p>
-      <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>You earned it!</p>
-      <p style={{ color: 'var(--text-muted)', margin: 0 }}>All done for today.</p>
-      <button
-        onClick={handlePlay}
-        disabled={launching}
-        style={{
-          marginTop: '1rem',
-          padding: '0.75rem 2rem',
-          fontSize: '1rem',
-          fontWeight: 700,
-          background: launching ? 'var(--surface-hover)' : 'var(--accent)',
-          color: '#fff',
-          borderRadius: 'var(--radius)',
-          cursor: launching ? 'not-allowed' : 'pointer',
-          transition: 'background 0.2s',
-        }}
-      >
-        {launching ? 'Launching...' : 'Play Flappy Bird →'}
-      </button>
-    </div>
-  );
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1417,9 +1369,20 @@ export default function App() {
     localStorage.setItem(DAILY_REVIEWS_KEY, JSON.stringify(dailyReviews));
   }, [dailyReviews]);
 
+  // Reset fired milestones and deckComplete when a new "day" starts (boundary = 4am Eastern)
+  useEffect(() => {
+    const lastReset = localStorage.getItem(LAST_RESET_KEY);
+    const boundary = getMostRecent4amEasternUTC();
+    if (!lastReset || Number(lastReset) < boundary.getTime()) {
+      localStorage.removeItem(FIRED_MILESTONES_KEY);
+      localStorage.removeItem(DECK_COMPLETE_KEY);
+      localStorage.setItem(LAST_RESET_KEY, String(Date.now()));
+      setDeckComplete(false);
+    }
+  }, []);
+
   const due = getDueCards(cards, progress, dailyNew, DEFAULT_MAX_NEW_PER_DAY, dailyReviews, DEFAULT_MAX_REVIEWS_PER_DAY);
   const current = due[0];
-  const unlockStatus = computeUnlockStatus(due);
 
   const handleResult = useCallback(
     ({ correct, responseMs }) => {
@@ -1430,8 +1393,7 @@ export default function App() {
 
       setProgress(result.progress);
       setTodayCount((c) => c + 1);
-      checkMilestones(result.progress, cards.length);
-      if (localStorage.getItem(DECK_COMPLETE_KEY) === 'true') setDeckComplete(true);
+      checkAndFireMilestones(result.progress, cards.length, setDeckComplete);
 
       // Only increment daily new counter if it was a NEW card AND not known-on-sight
       if (wasNew && !result.knownOnSight) {
@@ -1586,21 +1548,6 @@ export default function App() {
           >
             {view === 'settings' ? '✕' : '⚙'}
           </button>
-          <button
-            onClick={() => setView((v) => v === 'reward' ? 'study' : 'reward')}
-            aria-label="Game"
-            style={{
-              background: view === 'reward' ? 'var(--surface-hover)' : 'transparent',
-              color: 'var(--text-muted)',
-              fontSize: '1.15rem',
-              padding: '0.25rem 0.45rem',
-              borderRadius: 'var(--radius-sm)',
-              lineHeight: 1,
-              transition: 'background 0.2s',
-            }}
-          >
-            {view === 'reward' ? '✕' : '🎮'}
-          </button>
         </div>
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
           {learnedCount} learned · {knownOnSightCount > 0 ? `${knownOnSightCount} already known · ` : ''}{newCount} new ·{' '}
@@ -1638,8 +1585,7 @@ export default function App() {
             color: '#a5d6a7',
           }}
         >
-          <p style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.25rem' }}>🎉 Deck complete!</p>
-          <p style={{ margin: 0, fontSize: '0.9rem' }}>You've seen every card at least once. Impressive!</p>
+          <p style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.25rem' }}>🎉 Deck complete — social media unlocked until 4am</p>
         </div>
       )}
 
@@ -1690,9 +1636,6 @@ export default function App() {
         )
       )}
 
-      {view === 'reward' && (
-        <RewardScreen unlockStatus={unlockStatus} />
-      )}
     </div>
   );
 }
