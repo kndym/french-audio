@@ -1,4 +1,9 @@
 {
   "buildCommand": "npm run build-deck && npm run encrypt-key && npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "functions": {
+    "api/*.js": {
+      "runtime": "@vercel/node@3"
+    }
+  }
 }
