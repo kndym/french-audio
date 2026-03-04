@@ -59,6 +59,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  if (typeof req.body === 'string') {
+    try { req.body = JSON.parse(req.body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+  }
+
   const body = req.body;
 
   if (body.unlock_until_4am === true) {
