@@ -41,9 +41,9 @@ export function getCardState(progress, cardId) {
   };
 }
 
-/** Get today's date key (YYYY-MM-DD) for daily tracking. */
+/** Get today's date key (YYYY-MM-DD) for daily tracking. Uses Eastern Time to match the 4am reset boundary. */
 export function getTodayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
 /**
