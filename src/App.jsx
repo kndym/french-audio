@@ -14,6 +14,8 @@ const BACKUP_VERSION = 1;
 const FIRED_MILESTONES_KEY = 'firedMilestones';
 const DECK_COMPLETE_KEY = 'deckComplete';
 const LAST_RESET_KEY = 'lastResetDate';
+const TODAY_COUNT_KEY = 'french-flashcards-today-count';
+const PENDING_MILESTONE_MINS_KEY = 'french-pending-milestone-mins';
 const TEST_MODE_KEY = 'french-test-mode';
 const TEST_MODE_PW = '8bfd2d08d8226a7f636c7a510c80a6df';
 
@@ -1326,7 +1328,7 @@ function getMostRecent4amEasternUTC() {
  * unlock API (each fired only once per daily reset cycle).
  * At 100%, posts an unlock_until_4am credit and sets the deckComplete state.
  */
-async function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete) {
+function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete, setPendingMilestoneMins) {
   console.log('[milestones] checkAndFireMilestones called', { todayDone, todayTotal });
   if (todayTotal === 0) {
     console.log('[milestones] todayTotal=0, bailing');
@@ -1336,13 +1338,6 @@ async function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete) {
   const pct = (todayDone / todayTotal) * 100;
   console.log('[milestones] todayDone=%d / todayTotal=%d → pct=%.1f%%', todayDone, todayTotal, pct);
 
-  const secret = import.meta.env.VITE_UNLOCK_SECRET;
-  if (!secret) {
-    console.error('[milestones] VITE_UNLOCK_SECRET is not set — fetch will be skipped');
-    return;
-  }
-  console.log('[milestones] VITE_UNLOCK_SECRET present, starts with:', secret.slice(0, 4) + '…');
-
   let fired;
   try {
     fired = JSON.parse(localStorage.getItem(FIRED_MILESTONES_KEY) || '[]');
@@ -1350,50 +1345,35 @@ async function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete) {
   } catch {
     fired = [];
   }
-  console.log('[milestones] firedMilestones so far:', fired);
 
+  // Queue newly-crossed milestones locally — user claims them via button
   for (const m of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
     if (pct >= m && !fired.includes(m)) {
-      console.log('[milestones] crossing %d%% milestone — firing POST /api/unlock', m);
-      try {
-        const res = await fetch('/api/unlock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
-          body: JSON.stringify({ source: 'french', minutes: 5 }),
-        });
-        if (!res.ok) {
-          console.error('[milestones] /api/unlock returned', res.status, '— milestone NOT counted');
-          break;
-        }
-        console.log('[milestones] /api/unlock OK for milestone', m);
-      } catch (err) {
-        console.error('[milestones] fetch error:', err);
-        break;
-      }
+      console.log('[milestones] crossing %d%% — queuing 5 min locally', m);
       fired.push(m);
       localStorage.setItem(FIRED_MILESTONES_KEY, JSON.stringify(fired));
-      break; // fire at most one milestone per rating
+      setPendingMilestoneMins((prev) => {
+        const next = prev + 5;
+        localStorage.setItem(PENDING_MILESTONE_MINS_KEY, String(next));
+        return next;
+      });
+      break; // at most one milestone per rating
     }
   }
 
   if (pct >= 100 && !localStorage.getItem(DECK_COMPLETE_KEY)) {
     console.log('[milestones] deck 100% — firing unlock_until_4am');
-    try {
-      const res = await fetch('/api/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
-        body: JSON.stringify({ source: 'french', unlock_until_4am: true }),
-      });
-      if (!res.ok) {
-        console.error('[milestones] unlock_until_4am returned', res.status);
-        return;
-      }
-    } catch (err) {
-      console.error('[milestones] fetch error (unlock_until_4am):', err);
-      return;
-    }
-    localStorage.setItem(DECK_COMPLETE_KEY, 'true');
-    setDeckComplete(true);
+    const secret = import.meta.env.VITE_UNLOCK_SECRET;
+    if (!secret) { console.error('[milestones] VITE_UNLOCK_SECRET not set'); return; }
+    fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
+      body: JSON.stringify({ source: 'french', unlock_until_4am: true }),
+    }).then((res) => {
+      if (!res.ok) { console.error('[milestones] unlock_until_4am returned', res.status); return; }
+      localStorage.setItem(DECK_COMPLETE_KEY, 'true');
+      setDeckComplete(true);
+    }).catch((err) => console.error('[milestones] fetch error (unlock_until_4am):', err));
   }
 }
 
@@ -1403,7 +1383,16 @@ export default function App() {
   const [cards, setCards] = useState([]);
   const [progress, setProgress] = useState({});
   const [loading, setLoading] = useState(true);
-  const [todayCount, setTodayCount] = useState(0);
+  const [todayCount, setTodayCount] = useState(() => {
+    try {
+      const raw = localStorage.getItem(TODAY_COUNT_KEY);
+      if (raw) {
+        const { count, savedAt } = JSON.parse(raw);
+        if (savedAt >= getMostRecent4amEasternUTC().getTime()) return count;
+      }
+    } catch { }
+    return 0;
+  });
   const [dailyNew, setDailyNew] = useState({ date: getTodayKey(), count: 0 });
   const [dailyReviews, setDailyReviews] = useState(() => {
     try {
@@ -1428,6 +1417,10 @@ export default function App() {
   const [deckComplete, setDeckComplete] = useState(() => {
     try { return localStorage.getItem(DECK_COMPLETE_KEY) === 'true'; } catch { return false; }
   });
+  const [pendingMilestoneMins, setPendingMilestoneMins] = useState(() => {
+    try { return Number(localStorage.getItem(PENDING_MILESTONE_MINS_KEY) || '0'); } catch { return 0; }
+  });
+  const [claimStatus, setClaimStatus] = useState('idle'); // 'idle' | 'claiming' | 'error'
   const [testMode, setTestMode] = useState(() => {
     try { return localStorage.getItem(TEST_MODE_KEY) === 'true'; } catch { return false; }
   });
@@ -1475,6 +1468,10 @@ export default function App() {
     localStorage.setItem(DAILY_REVIEWS_KEY, JSON.stringify(dailyReviews));
   }, [dailyReviews]);
 
+  useEffect(() => {
+    localStorage.setItem(TODAY_COUNT_KEY, JSON.stringify({ count: todayCount, savedAt: Date.now() }));
+  }, [todayCount]);
+
   // Reset fired milestones and deckComplete when a new "day" starts (boundary = 4am Eastern)
   useEffect(() => {
     const lastReset = localStorage.getItem(LAST_RESET_KEY);
@@ -1489,8 +1486,12 @@ export default function App() {
       console.log('[milestones] Clearing firedMilestones + deckComplete for new day');
       localStorage.removeItem(FIRED_MILESTONES_KEY);
       localStorage.removeItem(DECK_COMPLETE_KEY);
+      localStorage.removeItem(TODAY_COUNT_KEY);
+      localStorage.removeItem(PENDING_MILESTONE_MINS_KEY);
       localStorage.setItem(LAST_RESET_KEY, String(Date.now()));
       setDeckComplete(false);
+      setTodayCount(0);
+      setPendingMilestoneMins(0);
     }
   }, []);
 
@@ -1506,7 +1507,7 @@ export default function App() {
 
       setProgress(result.progress);
       setTodayCount((c) => c + 1);
-      checkAndFireMilestones(todayCount + 1, todayCount + due.length, setDeckComplete);
+      checkAndFireMilestones(todayCount + 1, todayCount + due.length, setDeckComplete, setPendingMilestoneMins);
 
       // Only increment daily new counter if it was a NEW card AND not known-on-sight
       if (wasNew && !result.knownOnSight) {
@@ -1548,6 +1549,27 @@ export default function App() {
     setTodayCount(0);
     setLastBackup(null);
   }, []);
+
+  const handleClaimMins = useCallback(async () => {
+    if (pendingMilestoneMins <= 0 || claimStatus === 'claiming') return;
+    const secret = import.meta.env.VITE_UNLOCK_SECRET;
+    if (!secret) return;
+    setClaimStatus('claiming');
+    try {
+      const res = await fetch('/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
+        body: JSON.stringify({ source: 'french', minutes: pendingMilestoneMins }),
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      setPendingMilestoneMins(0);
+      localStorage.setItem(PENDING_MILESTONE_MINS_KEY, '0');
+      setClaimStatus('idle');
+    } catch (err) {
+      console.error('[milestones] claim failed:', err);
+      setClaimStatus('error');
+    }
+  }, [pendingMilestoneMins, claimStatus]);
 
   // Handle struggled words from conversation sessions (SRS bridge)
   const handleStruggledWords = useCallback((words) => {
@@ -1699,6 +1721,43 @@ export default function App() {
           }}
         >
           <p style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.25rem' }}>🎉 Deck complete — social media unlocked until 4am</p>
+        </div>
+      )}
+
+      {pendingMilestoneMins > 0 && !deckComplete && (
+        <div
+          style={{
+            background: '#1a2a3a',
+            border: '1px solid #4a90d9',
+            borderRadius: 'var(--radius)',
+            padding: '0.75rem 1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            gap: '1rem',
+          }}
+        >
+          <span style={{ fontSize: '0.95rem', color: '#90caf9' }}>
+            🎮 {pendingMilestoneMins} min unlock ready
+          </span>
+          <button
+            onClick={handleClaimMins}
+            disabled={claimStatus === 'claiming'}
+            style={{
+              background: claimStatus === 'error' ? '#5a1a1a' : '#1565c0',
+              border: 'none',
+              borderRadius: 'var(--radius)',
+              color: '#fff',
+              cursor: claimStatus === 'claiming' ? 'wait' : 'pointer',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              padding: '0.35rem 1rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {claimStatus === 'claiming' ? 'Claiming…' : claimStatus === 'error' ? 'Retry' : 'Claim'}
+          </button>
         </div>
       )}
 
