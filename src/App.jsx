@@ -1584,12 +1584,12 @@ export default function App() {
 
   const handleImport = useCallback((importedProgress, importedDailyNew) => {
     setProgress(importedProgress);
-    if (importedDailyNew) {
-      const today = getTodayKey();
-      if (importedDailyNew.date === today) {
-        setDailyNew(importedDailyNew);
-      }
+    const today = getTodayKey();
+    if (importedDailyNew && importedDailyNew.date === today) {
+      setDailyNew(importedDailyNew);
     }
+    setDailyReviews({ date: today, count: 0 });
+    setTodayCount(0);
   }, []);
 
   const handleReset = useCallback(() => {
