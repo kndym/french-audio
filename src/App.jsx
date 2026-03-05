@@ -16,7 +16,9 @@ const DECK_COMPLETE_KEY = 'deckComplete';
 const LAST_RESET_KEY = 'lastResetDate';
 const TODAY_COUNT_KEY = 'french-flashcards-today-count';
 const PENDING_MILESTONE_MINS_KEY = 'french-pending-milestone-mins';
-const TEST_MODE_KEY = 'french-test-mode';
+const TEST_MODE_KEY = 'french-test-mode'; // legacy key — cleared on mount to reset everyone
+const TEST_MODE_UNLOCK_AT_KEY = 'french-test-mode-unlock-at';
+const TEST_MODE_DELAY_MS = 10 * 60 * 1000; // 10 minutes
 const TEST_MODE_PW = '8bfd2d08d8226a7f636c7a510c80a6df';
 
 function normalize(text) {
@@ -110,11 +112,21 @@ function RecordButton({ onResult, disabled }) {
 }
 
 
-function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup, testMode, onTestModeChange }) {
+function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup, testMode, testModeUnlockAt, onTestModeSchedule, onTestModeDisable }) {
   const [mergeMode, setMergeMode] = useState(true);
   const [toast, setToast] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [testPw, setTestPw] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!testModeUnlockAt || testMode) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [testModeUnlockAt, testMode]);
+
+  const isPending = !!testModeUnlockAt && !testMode;
+  const secondsLeft = isPending ? Math.max(0, Math.ceil((testModeUnlockAt - now) / 1000)) : 0;
   const [apiKey, setApiKey] = useState(() => {
     try { return localStorage.getItem(API_KEY_STORAGE) || ''; } catch { return ''; }
   });
@@ -524,10 +536,22 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup, test
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontSize: '0.85rem', color: 'var(--warning)' }}>Test mode ON — voice disabled</span>
             <button
-              onClick={() => { localStorage.removeItem(TEST_MODE_KEY); onTestModeChange(false); }}
+              onClick={onTestModeDisable}
               style={{ marginLeft: 'auto', padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: 600, background: 'var(--surface-hover)', color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)' }}
             >
               Disable
+            </button>
+          </div>
+        ) : isPending ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Unlocking in {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}
+            </span>
+            <button
+              onClick={onTestModeDisable}
+              style={{ marginLeft: 'auto', padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: 600, background: 'var(--surface-hover)', color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)' }}
+            >
+              Cancel
             </button>
           </div>
         ) : (
@@ -539,10 +563,9 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup, test
               placeholder="Debug password"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && testPw === TEST_MODE_PW) {
-                  localStorage.setItem(TEST_MODE_KEY, 'true');
-                  onTestModeChange(true);
+                  onTestModeSchedule(Date.now() + TEST_MODE_DELAY_MS);
                   setTestPw('');
-                  showToast('Test mode enabled');
+                  showToast('Test mode unlocking in 10 min');
                 } else if (e.key === 'Enter') {
                   showToast('Wrong password', true);
                 }
@@ -552,10 +575,9 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup, test
             <button
               onClick={() => {
                 if (testPw === TEST_MODE_PW) {
-                  localStorage.setItem(TEST_MODE_KEY, 'true');
-                  onTestModeChange(true);
+                  onTestModeSchedule(Date.now() + TEST_MODE_DELAY_MS);
                   setTestPw('');
-                  showToast('Test mode enabled');
+                  showToast('Test mode unlocking in 10 min');
                 } else {
                   showToast('Wrong password', true);
                 }
@@ -1421,9 +1443,37 @@ export default function App() {
     try { return Number(localStorage.getItem(PENDING_MILESTONE_MINS_KEY) || '0'); } catch { return 0; }
   });
   const [claimStatus, setClaimStatus] = useState('idle'); // 'idle' | 'claiming' | 'error'
-  const [testMode, setTestMode] = useState(() => {
-    try { return localStorage.getItem(TEST_MODE_KEY) === 'true'; } catch { return false; }
+  const [testModeUnlockAt, setTestModeUnlockAt] = useState(() => {
+    try {
+      const v = localStorage.getItem(TEST_MODE_UNLOCK_AT_KEY);
+      return v ? Number(v) : null;
+    } catch { return null; }
   });
+  const [testMode, setTestMode] = useState(false);
+
+  // Clear legacy key on mount (resets anyone who had test mode enabled before the delay was added)
+  useEffect(() => { localStorage.removeItem(TEST_MODE_KEY); }, []);
+
+  // Activate testMode when the scheduled time is reached
+  useEffect(() => {
+    if (!testModeUnlockAt) { setTestMode(false); return; }
+    if (Date.now() >= testModeUnlockAt) { setTestMode(true); return; }
+    const id = setInterval(() => {
+      if (Date.now() >= testModeUnlockAt) { setTestMode(true); clearInterval(id); }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [testModeUnlockAt]);
+
+  const handleTestModeSchedule = useCallback((unlockAt) => {
+    setTestModeUnlockAt(unlockAt);
+    localStorage.setItem(TEST_MODE_UNLOCK_AT_KEY, String(unlockAt));
+  }, []);
+
+  const handleTestModeDisable = useCallback(() => {
+    setTestMode(false);
+    setTestModeUnlockAt(null);
+    localStorage.removeItem(TEST_MODE_UNLOCK_AT_KEY);
+  }, []);
 
   useEffect(() => {
     const secret = import.meta.env.VITE_UNLOCK_SECRET;
@@ -1769,7 +1819,9 @@ export default function App() {
           onReset={handleReset}
           lastBackup={lastBackup}
           testMode={testMode}
-          onTestModeChange={setTestMode}
+          testModeUnlockAt={testModeUnlockAt}
+          onTestModeSchedule={handleTestModeSchedule}
+          onTestModeDisable={handleTestModeDisable}
         />
       )}
 
