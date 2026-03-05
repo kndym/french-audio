@@ -1326,18 +1326,15 @@ function getMostRecent4amEasternUTC() {
  * unlock API (each fired only once per daily reset cycle).
  * At 100%, posts an unlock_until_4am credit and sets the deckComplete state.
  */
-async function checkAndFireMilestones(updatedProgress, totalCards, setDeckComplete) {
-  console.log('[milestones] checkAndFireMilestones called', { totalCards });
-  if (totalCards === 0) {
-    console.log('[milestones] totalCards=0, bailing');
+async function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete) {
+  console.log('[milestones] checkAndFireMilestones called', { todayDone, todayTotal });
+  if (todayTotal === 0) {
+    console.log('[milestones] todayTotal=0, bailing');
     return;
   }
 
-  const seenCount = Object.keys(updatedProgress).filter(
-    (id) => (updatedProgress[id].attempts || 0) > 0
-  ).length;
-  const pct = (seenCount / totalCards) * 100;
-  console.log('[milestones] seenCount=%d / totalCards=%d → pct=%.1f%%', seenCount, totalCards, pct);
+  const pct = (todayDone / todayTotal) * 100;
+  console.log('[milestones] todayDone=%d / todayTotal=%d → pct=%.1f%%', todayDone, todayTotal, pct);
 
   const secret = import.meta.env.VITE_UNLOCK_SECRET;
   if (!secret) {
@@ -1509,7 +1506,7 @@ export default function App() {
 
       setProgress(result.progress);
       setTodayCount((c) => c + 1);
-      checkAndFireMilestones(result.progress, cards.length, setDeckComplete);
+      checkAndFireMilestones(todayCount + 1, todayCount + due.length, setDeckComplete);
 
       // Only increment daily new counter if it was a NEW card AND not known-on-sight
       if (wasNew && !result.knownOnSight) {
@@ -1531,7 +1528,7 @@ export default function App() {
         });
       }
     },
-    [current, progress]
+    [current, progress, todayCount, due]
   );
 
   const handleImport = useCallback((importedProgress, importedDailyNew) => {
