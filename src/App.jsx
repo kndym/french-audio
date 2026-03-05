@@ -14,6 +14,8 @@ const BACKUP_VERSION = 1;
 const FIRED_MILESTONES_KEY = 'firedMilestones';
 const DECK_COMPLETE_KEY = 'deckComplete';
 const LAST_RESET_KEY = 'lastResetDate';
+const TEST_MODE_KEY = 'french-test-mode';
+const TEST_MODE_PW = '8bfd2d08d8226a7f636c7a510c80a6df';
 
 function normalize(text) {
   return (text || '')
@@ -106,10 +108,11 @@ function RecordButton({ onResult, disabled }) {
 }
 
 
-function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
+function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup, testMode, onTestModeChange }) {
   const [mergeMode, setMergeMode] = useState(true);
   const [toast, setToast] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [testPw, setTestPw] = useState('');
   const [apiKey, setApiKey] = useState(() => {
     try { return localStorage.getItem(API_KEY_STORAGE) || ''; } catch { return ''; }
   });
@@ -508,6 +511,59 @@ function SettingsPanel({ progress, dailyNew, onImport, onReset, lastBackup }) {
         >
           {confirmReset ? 'Tap again to confirm' : 'Reset All Progress'}
         </button>
+      </div>
+
+      {/* Test mode */}
+      <div style={{ borderTop: '1px solid var(--surface-hover)', paddingTop: '1rem', marginTop: '0.25rem' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Debug
+        </p>
+        {testMode ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--warning)' }}>Test mode ON — voice disabled</span>
+            <button
+              onClick={() => { localStorage.removeItem(TEST_MODE_KEY); onTestModeChange(false); }}
+              style={{ marginLeft: 'auto', padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: 600, background: 'var(--surface-hover)', color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)' }}
+            >
+              Disable
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="password"
+              value={testPw}
+              onChange={(e) => setTestPw(e.target.value)}
+              placeholder="Debug password"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && testPw === TEST_MODE_PW) {
+                  localStorage.setItem(TEST_MODE_KEY, 'true');
+                  onTestModeChange(true);
+                  setTestPw('');
+                  showToast('Test mode enabled');
+                } else if (e.key === 'Enter') {
+                  showToast('Wrong password', true);
+                }
+              }}
+              style={{ flex: 1, padding: '0.6rem 0.75rem', fontSize: '0.9rem', background: 'var(--surface-hover)', color: 'var(--text)', border: '1px solid transparent', borderRadius: 'var(--radius-sm)', outline: 'none' }}
+            />
+            <button
+              onClick={() => {
+                if (testPw === TEST_MODE_PW) {
+                  localStorage.setItem(TEST_MODE_KEY, 'true');
+                  onTestModeChange(true);
+                  setTestPw('');
+                  showToast('Test mode enabled');
+                } else {
+                  showToast('Wrong password', true);
+                }
+              }}
+              style={{ padding: '0.6rem 1rem', fontSize: '0.85rem', fontWeight: 600, background: 'var(--surface-hover)', color: 'var(--text)', borderRadius: 'var(--radius-sm)' }}
+            >
+              Enable
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -982,7 +1038,7 @@ function Dashboard({ cards, progress }) {
 
 const IDLE_TIMEOUT_MS = 30000;
 
-function CardView({ card, onResult }) {
+function CardView({ card, onResult, testMode }) {
   const [promptIndex] = useState(() => Math.floor(Math.random() * card.prompts.length));
   // phase: 'attempt' | 'paused' | 'reveal'
   const [phase, setPhase] = useState('attempt');
@@ -1116,25 +1172,42 @@ function CardView({ card, onResult }) {
         <>
           {promptBlock}
           {phase === 'attempt' && (
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={handleDontKnow}
-                style={{
-                  flex: 1,
-                  padding: '0.85rem',
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  background: 'var(--danger)',
-                  color: 'white',
-                  borderRadius: 'var(--radius-sm)',
-                }}
-              >
-                I don't know
-              </button>
-              <div style={{ flex: 1 }}>
-                <RecordButton onResult={handleSpeechResult} />
+            testMode ? (
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => onResult({ correct: false, responseMs: 12000 })}
+                  style={{ flex: 1, padding: '0.85rem', fontSize: '1rem', fontWeight: 600, background: 'var(--danger)', color: 'white', borderRadius: 'var(--radius-sm)' }}
+                >
+                  Incorrect
+                </button>
+                <button
+                  onClick={() => onResult({ correct: true, responseMs: 2500 })}
+                  style={{ flex: 1, padding: '0.85rem', fontSize: '1rem', fontWeight: 600, background: 'var(--success)', color: 'white', borderRadius: 'var(--radius-sm)' }}
+                >
+                  Correct
+                </button>
               </div>
-            </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={handleDontKnow}
+                  style={{
+                    flex: 1,
+                    padding: '0.85rem',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    background: 'var(--danger)',
+                    color: 'white',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  I don't know
+                </button>
+                <div style={{ flex: 1 }}>
+                  <RecordButton onResult={handleSpeechResult} />
+                </div>
+              </div>
+            )
           )}
 
           {phase === 'reveal' && (
@@ -1254,11 +1327,24 @@ function getMostRecent4amEasternUTC() {
  * At 100%, posts an unlock_until_4am credit and sets the deckComplete state.
  */
 async function checkAndFireMilestones(updatedProgress, totalCards, setDeckComplete) {
-  if (totalCards === 0) return;
+  console.log('[milestones] checkAndFireMilestones called', { totalCards });
+  if (totalCards === 0) {
+    console.log('[milestones] totalCards=0, bailing');
+    return;
+  }
 
-  const seenCount = Object.keys(updatedProgress).length;
-  const pct = seenCount / totalCards * 100;
+  const seenCount = Object.keys(updatedProgress).filter(
+    (id) => (updatedProgress[id].attempts || 0) > 0
+  ).length;
+  const pct = (seenCount / totalCards) * 100;
+  console.log('[milestones] seenCount=%d / totalCards=%d → pct=%.1f%%', seenCount, totalCards, pct);
+
   const secret = import.meta.env.VITE_UNLOCK_SECRET;
+  if (!secret) {
+    console.error('[milestones] VITE_UNLOCK_SECRET is not set — fetch will be skipped');
+    return;
+  }
+  console.log('[milestones] VITE_UNLOCK_SECRET present, starts with:', secret.slice(0, 4) + '…');
 
   let fired;
   try {
@@ -1267,16 +1353,26 @@ async function checkAndFireMilestones(updatedProgress, totalCards, setDeckComple
   } catch {
     fired = [];
   }
+  console.log('[milestones] firedMilestones so far:', fired);
 
   for (const m of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
     if (pct >= m && !fired.includes(m)) {
+      console.log('[milestones] crossing %d%% milestone — firing POST /api/unlock', m);
       try {
-        await fetch('/api/unlock', {
+        const res = await fetch('/api/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
           body: JSON.stringify({ source: 'french', minutes: 5 }),
         });
-      } catch { /* ignore network errors */ }
+        if (!res.ok) {
+          console.error('[milestones] /api/unlock returned', res.status, '— milestone NOT counted');
+          break;
+        }
+        console.log('[milestones] /api/unlock OK for milestone', m);
+      } catch (err) {
+        console.error('[milestones] fetch error:', err);
+        break;
+      }
       fired.push(m);
       localStorage.setItem(FIRED_MILESTONES_KEY, JSON.stringify(fired));
       break; // fire at most one milestone per rating
@@ -1284,13 +1380,21 @@ async function checkAndFireMilestones(updatedProgress, totalCards, setDeckComple
   }
 
   if (pct >= 100 && !localStorage.getItem(DECK_COMPLETE_KEY)) {
+    console.log('[milestones] deck 100% — firing unlock_until_4am');
     try {
-      await fetch('/api/unlock', {
+      const res = await fetch('/api/unlock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
         body: JSON.stringify({ source: 'french', unlock_until_4am: true }),
       });
-    } catch { /* ignore network errors */ }
+      if (!res.ok) {
+        console.error('[milestones] unlock_until_4am returned', res.status);
+        return;
+      }
+    } catch (err) {
+      console.error('[milestones] fetch error (unlock_until_4am):', err);
+      return;
+    }
     localStorage.setItem(DECK_COMPLETE_KEY, 'true');
     setDeckComplete(true);
   }
@@ -1327,8 +1431,13 @@ export default function App() {
   const [deckComplete, setDeckComplete] = useState(() => {
     try { return localStorage.getItem(DECK_COMPLETE_KEY) === 'true'; } catch { return false; }
   });
+  const [testMode, setTestMode] = useState(() => {
+    try { return localStorage.getItem(TEST_MODE_KEY) === 'true'; } catch { return false; }
+  });
 
   useEffect(() => {
+    const secret = import.meta.env.VITE_UNLOCK_SECRET;
+    console.log('[milestones] VITE_UNLOCK_SECRET on load:', secret ? secret.slice(0, 4) + '…' : 'UNDEFINED');
     fetch('/cards.json')
       .then((r) => r.json())
       .then(setCards)
@@ -1373,7 +1482,14 @@ export default function App() {
   useEffect(() => {
     const lastReset = localStorage.getItem(LAST_RESET_KEY);
     const boundary = getMostRecent4amEasternUTC();
+    console.log(
+      '[milestones] 4am-reset check: lastReset=%s, boundary=%s, needsReset=%s',
+      lastReset ? new Date(Number(lastReset)).toISOString() : 'never',
+      boundary.toISOString(),
+      !lastReset || Number(lastReset) < boundary.getTime()
+    );
     if (!lastReset || Number(lastReset) < boundary.getTime()) {
+      console.log('[milestones] Clearing firedMilestones + deckComplete for new day');
       localStorage.removeItem(FIRED_MILESTONES_KEY);
       localStorage.removeItem(DECK_COMPLETE_KEY);
       localStorage.setItem(LAST_RESET_KEY, String(Date.now()));
@@ -1501,7 +1617,7 @@ export default function App() {
       <header style={{ textAlign: 'center', width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.25rem', marginBottom: '0.25rem' }}>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>
-            Parler — Learn French
+            Parler — Learn French{testMode && <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--warning)', marginLeft: '0.4rem', verticalAlign: 'middle' }}>[TEST]</span>}
           </h1>
           <button
             onClick={() => setView((v) => v === 'conversation' ? 'study' : 'conversation')}
@@ -1596,6 +1712,8 @@ export default function App() {
           onImport={handleImport}
           onReset={handleReset}
           lastBackup={lastBackup}
+          testMode={testMode}
+          onTestModeChange={setTestMode}
         />
       )}
 
@@ -1613,7 +1731,7 @@ export default function App() {
 
       {view === 'study' && (
         current ? (
-          <CardView key={current.id} card={current} onResult={handleResult} />
+          <CardView key={current.id} card={current} onResult={handleResult} testMode={testMode} />
         ) : (
           <div
             style={{
