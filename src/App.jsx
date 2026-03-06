@@ -1401,75 +1401,6 @@ function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete, setPendi
 
 // ──────────────────────────────────────────────────────────────
 
-function DebugPanel({ due, todayCount, deckComplete, loading, setDeckComplete }) {
-  const [log, setLog] = useState([]);
-
-  const addLog = (msg, color = '#ccc') =>
-    setLog((prev) => [...prev.slice(-6), { msg, color, t: new Date().toLocaleTimeString() }]);
-
-  const fireUnlock = async () => {
-    const secret = import.meta.env.VITE_UNLOCK_SECRET;
-    if (!secret) { addLog('ERROR: VITE_UNLOCK_SECRET not set', '#f88'); return; }
-    addLog('POSTing unlock_until_4am...', '#ff0');
-    try {
-      const res = await fetch('/api/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
-        body: JSON.stringify({ source: 'french', unlock_until_4am: true }),
-      });
-      const text = await res.text();
-      if (res.ok) {
-        localStorage.setItem(DECK_COMPLETE_KEY, 'true');
-        setDeckComplete(true);
-        addLog(`OK ${res.status}: ${text}`, '#4f4');
-      } else {
-        addLog(`FAIL ${res.status}: ${text}`, '#f88');
-      }
-    } catch (err) {
-      addLog(`FETCH ERROR: ${err.message}`, '#f88');
-    }
-  };
-
-  const checkStatus = async () => {
-    const secret = import.meta.env.VITE_UNLOCK_SECRET;
-    if (!secret) { addLog('ERROR: VITE_UNLOCK_SECRET not set', '#f88'); return; }
-    addLog('Checking /api/unlock-status...', '#ff0');
-    try {
-      const res = await fetch(`/api/unlock-status?token=${secret}`);
-      const data = await res.json();
-      addLog(`status: ${JSON.stringify(data)}`, res.ok ? '#4f4' : '#f88');
-    } catch (err) {
-      addLog(`FETCH ERROR: ${err.message}`, '#f88');
-    }
-  };
-
-  const resetDeckKey = () => {
-    localStorage.removeItem(DECK_COMPLETE_KEY);
-    setDeckComplete(false);
-    addLog('Cleared DECK_KEY — retry will re-fire if due=0 & todayCount>0', '#8cf');
-  };
-
-  const total = todayCount + due.length;
-  const pct = total > 0 ? Math.round(todayCount / total * 100) : 0;
-  const btnStyle = { fontSize: '0.7rem', padding: '0.2rem 0.5rem', cursor: 'pointer', borderRadius: 3, border: 'none', fontWeight: 600 };
-
-  return (
-    <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', background: '#111', border: '1px solid #555', borderRadius: 4, padding: '0.5rem 0.75rem', width: '100%', color: '#ccc', lineHeight: 1.8 }}>
-      <div><strong style={{ color: '#ff0' }}>DEBUG</strong>{' '}
-        due={due.length} todayCount={todayCount} total={total} pct={pct}%{' '}
-        deckComplete={String(deckComplete)} loading={String(loading)}</div>
-      <div>DECK_KEY={localStorage.getItem(DECK_COMPLETE_KEY) || 'null'}{' '}
-        FIRED={localStorage.getItem(FIRED_MILESTONES_KEY) || 'null'}</div>
-      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
-        <button style={{ ...btnStyle, background: '#1a5c1a', color: '#4f4' }} onClick={fireUnlock}>Fire unlock_until_4am</button>
-        <button style={{ ...btnStyle, background: '#1a3a5c', color: '#8cf' }} onClick={checkStatus}>Check Redis status</button>
-        <button style={{ ...btnStyle, background: '#3a1a1a', color: '#f88' }} onClick={resetDeckKey}>Reset DECK_KEY</button>
-      </div>
-      {log.map((l, i) => <div key={i} style={{ color: l.color }}>{l.t} {l.msg}</div>)}
-    </div>
-  );
-}
-
 // ──────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -1622,26 +1553,18 @@ export default function App() {
   // Retry the final unlock if the deck is done but unlock_until_4am hasn't been confirmed yet.
   // This handles the case where the initial fire-and-forget fetch in checkAndFireMilestones failed.
   useEffect(() => {
-    console.log('[unlock-retry] effect ran — due=%d deckComplete=%s loading=%s todayCount=%d DECK_KEY=%s',
-      due.length, deckComplete, loading, todayCount, localStorage.getItem(DECK_COMPLETE_KEY));
-    if (due.length > 0 || deckComplete || loading || todayCount === 0) {
-      console.log('[unlock-retry] bailing (conditions not met)');
-      return;
-    }
+    if (due.length > 0 || deckComplete || loading || todayCount === 0) return;
     const secret = import.meta.env.VITE_UNLOCK_SECRET;
-    if (!secret) { console.error('[unlock-retry] VITE_UNLOCK_SECRET not set'); return; }
-    console.log('[unlock-retry] firing unlock_until_4am POST...');
+    if (!secret) return;
     fetch('/api/unlock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
       body: JSON.stringify({ source: 'french', unlock_until_4am: true }),
     }).then((res) => {
-      console.log('[unlock-retry] response status:', res.status);
-      if (!res.ok) { console.error('[unlock-retry] non-OK response', res.status); return; }
+      if (!res.ok) return;
       localStorage.setItem(DECK_COMPLETE_KEY, 'true');
       setDeckComplete(true);
-      console.log('[unlock-retry] success — deckComplete set');
-    }).catch((err) => console.error('[unlock-retry] fetch error:', err));
+    }).catch(() => {});
   }, [due.length, deckComplete, loading, todayCount]);
 
   const handleResult = useCallback(
@@ -1854,14 +1777,6 @@ export default function App() {
         })()}
       </header>
 
-      {/* DEBUG PANEL — remove after diagnosis */}
-      <DebugPanel
-        due={due}
-        todayCount={todayCount}
-        deckComplete={deckComplete}
-        loading={loading}
-        setDeckComplete={setDeckComplete}
-      />
 
       {deckComplete && (
         <div
