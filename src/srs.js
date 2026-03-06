@@ -59,8 +59,8 @@ export function classifyResult(correct, responseMs) {
 
 /**
  * Get cards that are due for review.
- * - Caps total daily cards (learning + reviews) at maxReviewsPerDay.
- * - Blocks new cards entirely while any REVIEW backlog exists.
+ * Fills up to maxReviewsPerDay slots by priority: overdue (learning/relearning) → reviews → new cards.
+ * All selected cards are shuffled together into one pool.
  */
 export function getDueCards(
   cards, progress,
@@ -71,12 +71,11 @@ export function getDueCards(
   const today = getTodayKey();
   const newAlreadyToday = (dailyNewCount && dailyNewCount.date === today) ? dailyNewCount.count : 0;
   const reviewsDoneToday = (dailyReviewCount && dailyReviewCount.date === today) ? dailyReviewCount.count : 0;
-  const reviewsRemainingToday = Math.max(0, maxReviewsPerDay - reviewsDoneToday);
+  let slotsRemaining = Math.max(0, maxReviewsPerDay - reviewsDoneToday);
 
   const dueReviews = [];
   const learningAvailable = [];
   const unavailable = [];
-  let newCardCount = 0;
 
   for (const card of cards) {
     const p = getCardState(progress, card.id);
@@ -91,28 +90,31 @@ export function getDueCards(
     }
   }
 
-  // Learning/relearning cards get priority; cap total (learning + reviews) to maxReviewsPerDay
-  const cappedLearning = learningAvailable.slice(0, reviewsRemainingToday);
-  const reviewSlotsRemaining = Math.max(0, reviewsRemainingToday - cappedLearning.length);
+  // Priority 1: overdue (learning/relearning), oldest first
+  learningAvailable.sort((a, b) => a.due - b.due);
+  const cappedLearning = learningAvailable.slice(0, slotsRemaining);
+  slotsRemaining = Math.max(0, slotsRemaining - cappedLearning.length);
 
+  // Priority 2: due reviews, oldest first
   dueReviews.sort((a, b) => a.due - b.due);
-  const cappedReviews = dueReviews.slice(0, reviewSlotsRemaining);
+  const cappedReviews = dueReviews.slice(0, slotsRemaining);
+  slotsRemaining = Math.max(0, slotsRemaining - cappedReviews.length);
 
-  // No new cards while any review backlog exists
+  // Priority 3: new cards fill remaining slots
   const newCards = [];
-  if (dueReviews.length === 0 && cappedLearning.length === learningAvailable.length) {
-    for (const card of cards) {
-      const p = getCardState(progress, card.id);
-      if (p.state === STATE.NEW && newAlreadyToday + newCardCount < maxNewPerDay) {
-        newCards.push({ ...card, progress: p, due: 0 });
-        newCardCount++;
-      }
+  let newCardCount = 0;
+  for (const card of cards) {
+    if (slotsRemaining <= 0) break;
+    const p = getCardState(progress, card.id);
+    if (p.state === STATE.NEW && newAlreadyToday + newCardCount < maxNewPerDay) {
+      newCards.push({ ...card, progress: p, due: 0 });
+      newCardCount++;
+      slotsRemaining--;
     }
   }
 
-  const available = [...cappedReviews, ...newCards, ...cappedLearning];
-
-  // Shuffle available cards
+  // Shuffle all selected cards together
+  const available = [...cappedLearning, ...cappedReviews, ...newCards];
   for (let i = available.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [available[i], available[j]] = [available[j], available[i]];
