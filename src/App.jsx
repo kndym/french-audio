@@ -1548,6 +1548,24 @@ export default function App() {
   const due = getDueCards(cards, progress, dailyNew, DEFAULT_MAX_NEW_PER_DAY, dailyReviews, DEFAULT_MAX_REVIEWS_PER_DAY);
   const current = due[0];
 
+  // Retry the final unlock if the deck is done but unlock_until_4am hasn't been confirmed yet.
+  // This handles the case where the initial fire-and-forget fetch in checkAndFireMilestones failed.
+  useEffect(() => {
+    if (due.length > 0 || deckComplete || loading || todayCount === 0) return;
+    const secret = import.meta.env.VITE_UNLOCK_SECRET;
+    if (!secret) return;
+    console.log('[milestones] retry: due=0, deckComplete=false — re-firing unlock_until_4am');
+    fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-unlock-token': secret },
+      body: JSON.stringify({ source: 'french', unlock_until_4am: true }),
+    }).then((res) => {
+      if (!res.ok) { console.error('[milestones] retry unlock_until_4am returned', res.status); return; }
+      localStorage.setItem(DECK_COMPLETE_KEY, 'true');
+      setDeckComplete(true);
+    }).catch((err) => console.error('[milestones] retry fetch error:', err));
+  }, [due.length, deckComplete, loading, todayCount]);
+
   const handleResult = useCallback(
     ({ correct, responseMs }) => {
       if (!current) return;
