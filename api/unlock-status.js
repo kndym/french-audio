@@ -22,6 +22,6 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     pending_minutes: pendingMinutes ? Number(pendingMinutes) : 0,
-    unlock_until_4am: unlockUntil4am === 'true',
+    unlock_until_4am: !!unlockUntil4am,
   });
 }

@@ -67,7 +67,7 @@ export default async function handler(req, res) {
 
   if (body.unlock_until_4am === true) {
     const ttl = secondsUntil4amEastern();
-    await redis.set('unlock_until_4am', 'true', { ex: ttl });
+    await redis.set('unlock_until_4am', 1, { ex: ttl });
     return res.status(200).json({ ok: true, ttl });
   }
 
