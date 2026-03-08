@@ -7,3 +7,8 @@ dist
 .vercel
 .env*.local
 ct-unlocker/
+
+# Intermediate card-generation artifacts (final output is public/cards.json)
+generated-cards.json
+synonym-candidates.json
+synonyms.json

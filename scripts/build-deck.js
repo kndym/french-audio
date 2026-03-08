@@ -15,7 +15,19 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CSV_PATH = path.join(__dirname, '..', 'words.csv');
 const GENERATED_PATH = path.join(__dirname, '..', 'generated-cards.json');
+const SYNONYMS_PATH = path.join(__dirname, '..', 'synonyms.json');
 const OUTPUT_PATH = path.join(__dirname, '..', 'public', 'cards.json');
+
+function loadSynonyms() {
+  try {
+    if (fs.existsSync(SYNONYMS_PATH)) {
+      return JSON.parse(fs.readFileSync(SYNONYMS_PATH, 'utf8'));
+    }
+  } catch (e) {
+    console.warn(`Warning: Could not load synonyms.json: ${e.message}`);
+  }
+  return {};
+}
 
 // Extended accepted forms for verbs (lemma + common conjugations)
 const VERB_FORMS = {
@@ -505,6 +517,7 @@ function main() {
 
   console.log('Loading LLM-generated cards...');
   const generated = loadGenerated();
+  const synonyms = loadSynonyms();
   const genCount = Object.keys(generated).length;
   console.log(`  ${genCount} lemmas from generated-cards.json`);
   console.log(`  ${Object.keys(FRENCH_BLANK_PROMPTS).length} hand-crafted lemmas (override)`);
@@ -522,6 +535,17 @@ function main() {
     if (/^\d+$/.test(first)) {
       dataStart = i;
       break;
+    }
+  }
+
+  // Build rank lookup so synonyms can be filtered to already-learned words only
+  const rankOf = {};
+  for (let i = dataStart; i < rows.length; i++) {
+    const row = rows[i];
+    const freq = parseInt(row[0], 10);
+    const lemme = (row[1] || '').trim();
+    if (lemme && !isNaN(freq)) {
+      rankOf[normalize(lemme)] = freq;
     }
   }
 
@@ -544,11 +568,22 @@ function main() {
     else if ((generated[lemme] && generated[lemme].length > 0) || (generated[key] && generated[key].length > 0)) generatedUsed++;
     else placeholderUsed++;
 
+    const rawSyn = synonyms[lemme] || synonyms[normalize(lemme)];
+    // Only include synonyms the learner has already encountered (lower rank = learned earlier)
+    const filterByRank = (list) =>
+      (list || []).filter((w) => {
+        const r = rankOf[normalize(w)];
+        return r !== undefined && r < freq;
+      });
     cards.push({
       id: `card-${freq}`,
       french: lemme,
       rank: freq,
       prompts,
+      synonyms: {
+        strong: filterByRank(rawSyn?.strong),
+        near: filterByRank(rawSyn?.near),
+      },
     });
   }
 

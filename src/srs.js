@@ -41,9 +41,19 @@ export function getCardState(progress, cardId) {
   };
 }
 
-/** Get today's date key (YYYY-MM-DD) for daily tracking. Uses Eastern Time to match the 4am reset boundary. */
+/**
+ * Get the current "day" key (YYYY-MM-DD) for daily tracking.
+ * Uses a 4am Eastern boundary: between midnight and 4am, returns the previous calendar day
+ * so that the daily limits stay consistent with the app's 4am reset boundary.
+ */
 export function getTodayKey() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const tz = 'America/New_York';
+  const now = new Date();
+  // Get current Eastern hour (0–23)
+  const hour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now));
+  // Before 4am Eastern, treat it as still "yesterday"
+  const adjusted = hour < 4 ? new Date(now.getTime() - 24 * 3600 * 1000) : now;
+  return adjusted.toLocaleDateString('en-CA', { timeZone: tz });
 }
 
 /**

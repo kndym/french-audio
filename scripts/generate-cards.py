@@ -36,7 +36,7 @@ def load_dotenv(env_path: str):
 # Config
 # ---------------------------------------------------------------------------
 BATCH_SIZE = 20          # words per API call
-MODEL_NAME = "gemini-2.5-flash-lite"
+MODEL_NAME = "gemma-3-27b-it"
 MAX_RPM = 10             # Gemini 2.5 Flash Lite free tier rate limit
 SLEEP_BETWEEN = 60 / MAX_RPM + 2.0  # ~8s between requests (stay safe)
 MAX_RETRIES = 5

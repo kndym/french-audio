@@ -1,55 +1,39 @@
 ```markdown
-# Plan for French Fill-in-the-Blank Prompts (Comprehensive Generation)
+# Synonym Pipeline Plan
 
-## 1. Extract Lemmas from `words.csv`
-- Read `words.csv` in chunks to handle large file size.
-- Parse each line to extract the "lemme" (second column).
-- Store all unique lemmas in a list.
+## Overview
+Find synonym pairs for French lemmas using real dictionary data, then classify
+them as strong or near synonyms using Gemma.
 
-## 2. Implement Comprehensive Sentence and Accepted Answer Generation in `process_words.py`
-- **Objective**: The `generate_prompts(lemme)` function will be significantly expanded to create 2–4 natural French sentences with blanks and accurate `acceptedAnswers` for EACH lemma, following the detailed rules in `prompt.md` for various word types.
+## Pipeline
 
-### 2.1. Verb Generation
-- Implement logic to generate 2–4 sentences covering different tenses/forms (infinitive, present, passé composé, imparfait, futur, imperative, subjunctive), using varying subjects.
-- Accurately determine and list all valid conjugations in `acceptedAnswers` for each specific blank.
+### 1. Fetch synonym candidates — `scripts/fetch-synonyms.py`
+- Extract and normalize lemmas from `words.csv` (lowercase, deduplicate, skip < 3 chars)
+- For each lemma, query **fr.Wiktionary** API (wikitext parse → `{{S|synonymes}}` block)
+- Fallback: scrape **CRISCO DES** (`crisco.unicaen.fr/des/synonymes/{word}`)
+- Cross-filter candidates: keep only words that exist in our `words.csv` lemma set
+- Output: `synonym-candidates.json` — `[{ word, candidates: [...] }, ...]`
+- Flags: `--limit N`, `--min-len N`, `--resume`
 
-### 2.2. Noun Generation
-- Implement logic to generate 2–3 sentences using the noun in different contexts (subject, object, after a preposition).
-- `hint` will be the English meaning.
-- `acceptedAnswers` will include the word as-is, plus plural or alternate spellings if applicable to the sentence.
+### 2. Classify with Gemma — `scripts/classify-synonyms.py`
+- Load `synonym-candidates.json`, build unique word pairs
+- Batch 20 pairs per call to `gemma-3-27b-it` via Google genai
+- Prompt asks for classification: `"strong"` | `"near"` | `"none"`
+  - **strong**: nearly interchangeable in everyday French
+  - **near**: related but with register/connotation/usage differences
+  - **none**: reject (false cognate, antonym, distantly related)
+- Write both directions symmetrically (a→b and b→a)
+- Output: `synonyms.json` — `{ word: { strong: [...], near: [...] } }`
+- Flags: `--batch-size N`, `--resume`
 
-### 2.3. Adjective Generation
-- Implement logic to generate 2–3 sentences, varying gender/number agreement where possible.
-- `hint` will be the English meaning.
-- `acceptedAnswers` will include all agreement forms that fit the blank.
+### 3. Rebuild deck — `node scripts/build-deck.js`
+- Already loads `synonyms.json` via `loadSynonyms()` and merges into each card
+- Cards get `synonyms: { strong: [...], near: [...] }` field populated
 
-### 2.4. Other Word Types (Adverbs, Prepositions, Conjunctions, Pronouns, Determiners)
-- Implement logic to generate 2 sentences showing the word in different natural contexts.
-- `hint` will be the English meaning or function.
-- `acceptedAnswers` will typically be the word itself, with variants if applicable.
-
-### 2.5. Quality Guidelines Adherence
-- Ensure sentences are short (6–12 words), conversational, and use common vocabulary.
-- Avoid repeating sentence structures for the same lemma.
-- Ensure the lemma (or its inflected form) appears *only* in the blank.
-- Provide sufficient context for learners to deduce the answer.
-
-## 3. Structure Output into `public/cards.json`
-- Iterate through the list of extracted lemmas.
-- For each lemma, call `generate_prompts` to get the sentences and accepted answers.
-- Format the output into a JSON object as specified:
-  ```json
-  {
-    "lemme": [
-      { "sentence": "...", "hint": "...", "acceptedAnswers": ["..."] },
-      { "sentence": "...", "hint": "...", "acceptedAnswers": ["..."] }
-    ]
-  }
-  ```
-- Write the complete JSON object to `public/cards.json`.
-
-## 4. Refinement and Review
-- Thoroughly review generated prompts for correctness, naturalness, and adherence to all rules, especially for high-frequency words.
-- Address any grammatical errors, inconsistencies, or unnatural phrasing.
-
+## Run order
+```bash
+python scripts/fetch-synonyms.py --resume
+python scripts/classify-synonyms.py --resume
+node scripts/build-deck.js
+```
 ```
