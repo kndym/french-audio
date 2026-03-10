@@ -1332,7 +1332,7 @@ function getMostRecent4amEasternUTC() {
   for (const utcHour of [8, 9]) {
     const candidate = new Date(`${ymd}T${String(utcHour).padStart(2, '0')}:00:00Z`);
     const h = parseInt(new Intl.DateTimeFormat('en-US', {
-      timeZone: tz, hour: '2-digit', hour12: false,
+      timeZone: tz, hour: '2-digit', hourCycle: 'h23',
     }).format(candidate));
     if (h === 4) {
       // If today's 4am is in the future, use yesterday's 4am

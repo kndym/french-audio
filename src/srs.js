@@ -49,11 +49,56 @@ export function getCardState(progress, cardId) {
 export function getTodayKey() {
   const tz = 'America/New_York';
   const now = new Date();
-  // Get current Eastern hour (0–23)
-  const hour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(now));
+  // Use hourCycle:'h23' to guarantee 0–23 range (hour12:false can return 24 at midnight in some browsers)
+  const hour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).format(now));
   // Before 4am Eastern, treat it as still "yesterday"
   const adjusted = hour < 4 ? new Date(now.getTime() - 24 * 3600 * 1000) : now;
   return adjusted.toLocaleDateString('en-CA', { timeZone: tz });
+}
+
+/**
+ * Compute the Unix timestamp (ms) for when a card with the given interval should next be due,
+ * aligned to the 4am ET daily boundary.
+ *
+ * interval=1 → due at the next upcoming 4am ET (i.e., the start of the next 4am-day)
+ * interval=7 → due at next 4am ET + 6 more days
+ *
+ * This prevents midnight spikes caused by cards all becoming due at the same wall-clock
+ * time they were last reviewed.
+ */
+function getNext4amReview(intervalDays) {
+  const tz = 'America/New_York';
+  const now = new Date();
+
+  // Get today's calendar date in ET (YYYY-MM-DD)
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+
+  // Probe UTC hours 8 (=4am EDT) and 9 (=4am EST) to find today's 4am ET in UTC
+  let today4amUTC = null;
+  for (const utcHour of [8, 9]) {
+    const candidate = new Date(`${ymd}T${String(utcHour).padStart(2, '0')}:00:00Z`);
+    const h = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hour: '2-digit', hourCycle: 'h23',
+    }).format(candidate));
+    if (h === 4) { today4amUTC = candidate; break; }
+  }
+
+  if (!today4amUTC) {
+    // Fallback: plain wall-clock scheduling
+    return Date.now() + intervalDays * 24 * 3600 * 1000;
+  }
+
+  // The "next" 4am ET boundary:
+  // • If today's 4am is still in the future (it's before 4am ET now) → use today's 4am
+  // • Otherwise (it's after 4am ET) → use tomorrow's 4am
+  const next4am = today4amUTC > now
+    ? today4amUTC.getTime()
+    : today4amUTC.getTime() + 24 * 3600 * 1000;
+
+  // interval=1 → due at next 4am (0 extra days); interval=7 → next 4am + 6 days
+  return next4am + (intervalDays - 1) * 24 * 3600 * 1000;
 }
 
 /**
@@ -173,20 +218,20 @@ export function processReview(progress, cardId, correct, responseMs) {
       p.interval = KNOWN_FAST_INTERVAL;
       p.ease = Math.min(3.0, p.ease + EASE_BONUS_FAST);
       p.reps = (p.reps || 0) + 1;
-      p.nextReview = Date.now() + KNOWN_FAST_INTERVAL * 24 * 60 * 60 * 1000;
+      p.nextReview = getNext4amReview(KNOWN_FAST_INTERVAL);
     } else if (grade === 'know_medium') {
       // Medium speed correct: graduate with moderate interval
       p.state = STATE.REVIEW;
       p.interval = KNOWN_MEDIUM_INTERVAL;
       p.reps = (p.reps || 0) + 1;
-      p.nextReview = Date.now() + KNOWN_MEDIUM_INTERVAL * 24 * 60 * 60 * 1000;
+      p.nextReview = getNext4amReview(KNOWN_MEDIUM_INTERVAL);
     } else {
       // Slow correct: graduate with short interval
       p.state = STATE.REVIEW;
       p.interval = KNOWN_SLOW_INTERVAL;
       p.ease = Math.max(MIN_EASE, p.ease + EASE_PENALTY_SLOW);
       p.reps = (p.reps || 0) + 1;
-      p.nextReview = Date.now() + KNOWN_SLOW_INTERVAL * 24 * 60 * 60 * 1000;
+      p.nextReview = getNext4amReview(KNOWN_SLOW_INTERVAL);
     }
   } else {
     // REVIEW state (graduated card coming back for review)
@@ -200,17 +245,17 @@ export function processReview(progress, cardId, correct, responseMs) {
       p.ease = Math.min(3.0, p.ease + EASE_BONUS_FAST);
       p.interval = Math.max(p.interval + 1, p.interval * p.ease);
       p.reps++;
-      p.nextReview = Date.now() + p.interval * 24 * 60 * 60 * 1000;
+      p.nextReview = getNext4amReview(p.interval);
     } else if (grade === 'know_medium') {
       p.interval = Math.max(p.interval + 1, p.interval * p.ease * 0.9);
       p.reps++;
-      p.nextReview = Date.now() + p.interval * 24 * 60 * 60 * 1000;
+      p.nextReview = getNext4amReview(p.interval);
     } else {
       // know_slow: correct but hesitant, schedule sooner
       p.ease = Math.max(MIN_EASE, p.ease + EASE_PENALTY_SLOW);
       p.interval = Math.max(p.interval + 1, p.interval * p.ease * 0.7);
       p.reps++;
-      p.nextReview = Date.now() + p.interval * 24 * 60 * 60 * 1000;
+      p.nextReview = getNext4amReview(p.interval);
     }
   }
 
