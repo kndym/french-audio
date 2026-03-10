@@ -16,7 +16,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CSV_PATH = path.join(__dirname, '..', 'words.csv');
 const GENERATED_PATH = path.join(__dirname, '..', 'generated-cards.json');
 const SYNONYMS_PATH = path.join(__dirname, '..', 'synonyms.json');
+const CANDIDATES_PATH = path.join(__dirname, '..', 'synonym-candidates.json');
 const OUTPUT_PATH = path.join(__dirname, '..', 'public', 'cards.json');
+const META_PATH = path.join(__dirname, '..', 'public', 'deck-meta.json');
 
 function loadSynonyms() {
   try {
@@ -489,14 +491,27 @@ function loadGenerated() {
   return {};
 }
 
-function getPrompts(lemme, generated) {
+function getPrompts(lemme, generated, synonyms) {
   const key = normalize(lemme);
-  // Priority 1: hand-crafted prompts (highest quality)
-  if (FRENCH_BLANK_PROMPTS[key]) return FRENCH_BLANK_PROMPTS[key];
-  // Priority 2: LLM-generated prompts
-  if (generated[lemme] && generated[lemme].length > 0) return generated[lemme];
-  if (generated[key] && generated[key].length > 0) return generated[key];
-  // Priority 3: fallback placeholder
+  const handcrafted = FRENCH_BLANK_PROMPTS[key];
+  const llmPrompts = generated[lemme] || generated[key] || [];
+  const hasNearSynonyms = (synonyms[lemme] || synonyms[key])?.near?.length > 0;
+
+  if (handcrafted) {
+    // For hand-crafted lemmas with near synonyms, append LLM contrast prompts (up to 6 total)
+    if (hasNearSynonyms && llmPrompts.length > 0) {
+      const merged = [...handcrafted];
+      for (const p of llmPrompts) {
+        if (merged.length >= 6) break;
+        merged.push(p);
+      }
+      return merged;
+    }
+    return handcrafted;
+  }
+  // LLM-generated prompts
+  if (llmPrompts.length > 0) return llmPrompts;
+  // Fallback placeholder
   return [{ sentence: `___`, hint: lemme, acceptedAnswers: [lemme] }];
 }
 
@@ -560,7 +575,7 @@ function main() {
     const freq = parseInt(row[0], 10);
     const lemme = (row[1] || '').trim();
     if (!lemme || isNaN(freq)) continue;
-    const prompts = getPrompts(lemme, generated);
+    const prompts = getPrompts(lemme, generated, synonyms);
 
     // Track source
     const key = normalize(lemme);
@@ -587,11 +602,29 @@ function main() {
     });
   }
 
+  // Compute synonym coverage boundary (highest rank card whose lemma was checked)
+  let synonymCoverageRank = 0;
+  try {
+    if (fs.existsSync(CANDIDATES_PATH)) {
+      const candidates = JSON.parse(fs.readFileSync(CANDIDATES_PATH, 'utf8'));
+      const checkedWords = new Set(candidates.map((e) => e.word.toLowerCase()));
+      for (const card of cards) {
+        if (checkedWords.has(card.french.toLowerCase()) && card.rank > synonymCoverageRank) {
+          synonymCoverageRank = card.rank;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`Warning: Could not compute synonym coverage rank: ${e.message}`);
+  }
+
   const outDir = path.dirname(OUTPUT_PATH);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(cards, null, 2), 'utf8');
+  fs.writeFileSync(META_PATH, JSON.stringify({ synonymCoverageRank }, null, 2), 'utf8');
   console.log(`\nWrote ${cards.length} cards to ${OUTPUT_PATH}`);
   console.log(`  ${handcraftedUsed} hand-crafted, ${generatedUsed} LLM-generated, ${placeholderUsed} placeholders`);
+  console.log(`  Synonym coverage up to rank ${synonymCoverageRank}`);
 }
 
 main();

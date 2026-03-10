@@ -38,6 +38,20 @@ function matchesAnswer(spoken, acceptedAnswers) {
   });
 }
 
+// Returns 'exact' | 'strong' | 'near' | null
+function classifyAnswer(spoken, acceptedAnswers, synonyms) {
+  const n = normalize(spoken);
+  if (!n) return null;
+  const matches = (list) => (list || []).some((a) => {
+    const an = normalize(a);
+    return n === an || n.includes(an) || an.includes(n);
+  });
+  if (matches(acceptedAnswers)) return 'exact';
+  if (matches(synonyms?.strong)) return 'strong';
+  if (matches(synonyms?.near)) return 'near';
+  return null;
+}
+
 function RecordButton({ onResult, disabled }) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState(null);
@@ -825,7 +839,7 @@ function ConversationGaps({ cards, progress }) {
   );
 }
 
-function Dashboard({ cards, progress }) {
+function Dashboard({ cards, progress, synonymCoverageRank }) {
   const [showAllWords, setShowAllWords] = useState(false);
 
   const stats = useMemo(() => {
@@ -919,8 +933,38 @@ function Dashboard({ cards, progress }) {
     dayLabels.push(i === 0 ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }));
   }
 
+  // Highest rank card the user has started (attempted at least once)
+  const frontierRank = useMemo(() => {
+    let max = 0;
+    for (const card of cards) {
+      const p = getCardState(progress, card.id);
+      if ((p.attempts || 0) > 0 && card.rank > max) max = card.rank;
+    }
+    return max;
+  }, [cards, progress]);
+
+  const showSynonymWarning = synonymCoverageRank !== null
+    && frontierRank > 0
+    && frontierRank >= synonymCoverageRank - 200;
+
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* Synonym coverage warning */}
+      {showSynonymWarning && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          background: 'rgba(245,158,11,0.12)',
+          border: '1px solid rgba(245,158,11,0.35)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '0.85rem',
+          color: '#d97706',
+          lineHeight: 1.5,
+        }}>
+          <strong>Synonym coverage ending soon</strong> — you're at rank {frontierRank}, synonyms checked up to rank {synonymCoverageRank}.
+          Run <code style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>python scripts/fetch-synonyms.py --limit 0 --resume</code> then the classify + contrast scripts to extend coverage.
+        </div>
+      )}
+
       {/* Stat tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
         <StatTile label="Mastered" value={stats.mastered} color="var(--success)" />
@@ -1068,6 +1112,7 @@ function CardView({ card, onResult, testMode }) {
   const [phase, setPhase] = useState('attempt');
   const [transcript, setTranscript] = useState(null); // null = not recorded, string = recorded
   const [gaveUp, setGaveUp] = useState(false);
+  const [matchType, setMatchType] = useState(null); // 'exact'|'strong'|'near'|null
   const startTimeRef = useRef(Date.now());
   const responseTimeRef = useRef(null);
 
@@ -1101,8 +1146,9 @@ function CardView({ card, onResult, testMode }) {
   const handleSpeechResult = useCallback((text) => {
     responseTimeRef.current = Date.now() - startTimeRef.current;
     setTranscript(text);
+    setMatchType(classifyAnswer(text, acceptedAnswers, card.synonyms));
     setPhase('reveal');
-  }, []);
+  }, [acceptedAnswers, card.synonyms]);
 
   const handleDontKnow = useCallback(() => {
     responseTimeRef.current = Date.now() - startTimeRef.current;
@@ -1246,6 +1292,34 @@ function CardView({ card, onResult, testMode }) {
                 </div>
               )}
 
+              {/* Near synonym badge */}
+              {matchType === 'near' && (
+                <div style={{
+                  padding: '0.6rem 0.85rem',
+                  background: 'rgba(245,158,11,0.15)',
+                  border: '1px solid rgba(245,158,11,0.4)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.9rem',
+                  color: '#d97706',
+                }}>
+                  Near synonym — close, but not quite right
+                </div>
+              )}
+
+              {/* Strong synonym badge */}
+              {matchType === 'strong' && (
+                <div style={{
+                  padding: '0.6rem 0.85rem',
+                  background: 'rgba(34,197,94,0.12)',
+                  border: '1px solid rgba(34,197,94,0.35)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.9rem',
+                  color: '#16a34a',
+                }}>
+                  Strong synonym
+                </div>
+              )}
+
               {/* Accepted answers */}
               <div>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
@@ -1258,8 +1332,8 @@ function CardView({ card, onResult, testMode }) {
                 </p>
               </div>
 
-              {/* Self-grade or Next (if gave up) */}
-              {gaveUp ? (
+              {/* Self-grade or Next */}
+              {(gaveUp || matchType === 'near') ? (
                 <button
                   onClick={() => onResult({ correct: false, responseMs })}
                   style={{
@@ -1405,6 +1479,7 @@ function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete, setPendi
 
 export default function App() {
   const [cards, setCards] = useState([]);
+  const [synonymCoverageRank, setSynonymCoverageRank] = useState(null);
   const [progress, setProgress] = useState({});
   const [loading, setLoading] = useState(true);
   const [todayCount, setTodayCount] = useState(() => {
@@ -1485,6 +1560,10 @@ export default function App() {
       .then(setCards)
       .catch(() => setCards([]))
       .finally(() => setLoading(false));
+    fetch('/deck-meta.json')
+      .then((r) => r.json())
+      .then((m) => setSynonymCoverageRank(m.synonymCoverageRank ?? null))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1854,7 +1933,7 @@ export default function App() {
       )}
 
       {view === 'dashboard' && (
-        <Dashboard cards={cards} progress={progress} />
+        <Dashboard cards={cards} progress={progress} synonymCoverageRank={synonymCoverageRank} />
       )}
 
       {view === 'study' && (
