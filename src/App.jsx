@@ -1431,8 +1431,7 @@ function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete, setPendi
     return;
   }
 
-  const pct = (todayDone / todayTotal) * 100;
-  console.log('[milestones] todayDone=%d / todayTotal=%d → pct=%.1f%%', todayDone, todayTotal, pct);
+  console.log('[milestones] todayDone=%d / todayTotal=%d', todayDone, todayTotal);
 
   let fired;
   try {
@@ -1442,22 +1441,20 @@ function checkAndFireMilestones(todayDone, todayTotal, setDeckComplete, setPendi
     fired = [];
   }
 
-  // Queue newly-crossed milestones locally — user claims them via button
-  for (const m of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
-    if (pct >= m && !fired.includes(m)) {
-      console.log('[milestones] crossing %d%% — queuing 5 min locally', m);
-      fired.push(m);
-      localStorage.setItem(FIRED_MILESTONES_KEY, JSON.stringify(fired));
-      setPendingMilestoneMins((prev) => {
-        const next = prev + 5;
-        localStorage.setItem(PENDING_MILESTONE_MINS_KEY, String(next));
-        return next;
-      });
-      break; // at most one milestone per rating
-    }
+  // Queue a milestone for every 10 cards completed — user claims them via button
+  const milestone = Math.floor(todayDone / 10) * 10;
+  if (milestone > 0 && !fired.includes(milestone)) {
+    console.log('[milestones] crossing %d cards — queuing 5 min locally', milestone);
+    fired.push(milestone);
+    localStorage.setItem(FIRED_MILESTONES_KEY, JSON.stringify(fired));
+    setPendingMilestoneMins((prev) => {
+      const next = prev + 5;
+      localStorage.setItem(PENDING_MILESTONE_MINS_KEY, String(next));
+      return next;
+    });
   }
 
-  if (pct >= 100 && !localStorage.getItem(DECK_COMPLETE_KEY)) {
+  if (todayDone >= todayTotal && todayTotal > 0 && !localStorage.getItem(DECK_COMPLETE_KEY)) {
     console.log('[milestones] deck 100% — firing unlock_until_4am');
     const secret = import.meta.env.VITE_UNLOCK_SECRET;
     if (!secret) { console.error('[milestones] VITE_UNLOCK_SECRET not set'); return; }
