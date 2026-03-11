@@ -1531,6 +1531,8 @@ export default function App() {
   // Clear legacy key on mount (resets anyone who had test mode enabled before the delay was added)
   useEffect(() => { localStorage.removeItem(TEST_MODE_KEY); }, []);
 
+  const sessionTotalRef = useRef(null);
+
   // Activate testMode when the scheduled time is reached
   useEffect(() => {
     if (!testModeUnlockAt) { setTestMode(false); return; }
@@ -1623,11 +1625,25 @@ export default function App() {
       setDeckComplete(false);
       setTodayCount(0);
       setPendingMilestoneMins(0);
+      sessionTotalRef.current = null;
     }
   }, []);
 
   const due = getDueCards(cards, progress, dailyNew, DEFAULT_MAX_NEW_PER_DAY, dailyReviews, DEFAULT_MAX_REVIEWS_PER_DAY);
   const current = due[0];
+
+  // Cards finished for today: nextReview is past today's 4am ET window end
+  const next4amEt = getMostRecent4amEasternUTC().getTime() + 24 * 60 * 60 * 1000;
+  const completedToday = cards.filter(card => {
+    const p = progress[card.id];
+    return p && p.nextReview >= next4amEt;
+  }).length;
+
+  // Fix denominator at session start (never changes mid-session)
+  if (sessionTotalRef.current === null && (due.length > 0 || completedToday > 0)) {
+    sessionTotalRef.current = completedToday + due.length;
+  }
+  const sessionTotal = sessionTotalRef.current ?? (completedToday + due.length);
 
   // Retry the final unlock if the deck is done but unlock_until_4am hasn't been confirmed yet.
   // This handles the case where the initial fire-and-forget fetch in checkAndFireMilestones failed.
@@ -1655,7 +1671,6 @@ export default function App() {
 
       setProgress(result.progress);
       setTodayCount((c) => c + 1);
-      checkAndFireMilestones(todayCount + 1, todayCount + due.length, setDeckComplete, setPendingMilestoneMins);
 
       // Only increment daily new counter if it was a NEW card AND not known-on-sight
       if (wasNew && !result.knownOnSight) {
@@ -1679,6 +1694,13 @@ export default function App() {
     },
     [current, progress, todayCount, due]
   );
+
+  // Fire milestones whenever completedToday changes (derived from progress, always accurate)
+  useEffect(() => {
+    if (sessionTotalRef.current !== null && completedToday > 0) {
+      checkAndFireMilestones(completedToday, sessionTotalRef.current, setDeckComplete, setPendingMilestoneMins);
+    }
+  }, [completedToday]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleImport = useCallback((importedProgress, importedDailyNew) => {
     setProgress(importedProgress);
@@ -1839,14 +1861,14 @@ export default function App() {
             : `${newToday}/${DEFAULT_MAX_NEW_PER_DAY} new today · ${todayCount} reviews`}
         </p>
         {(() => {
-          const total = todayCount + due.length;
+          const total = sessionTotal;
           if (total === 0) return null;
-          const pct = Math.round(todayCount / total * 100);
+          const pct = total > 0 ? Math.round(completedToday / total * 100) : 0;
           return (
             <div style={{ width: '100%', marginTop: '0.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.2rem' }}>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Today's cards</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{todayCount} / {total} · {pct}%</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{completedToday} / {total} · {pct}%</span>
               </div>
               <div style={{ width: '100%', height: '5px', background: 'var(--surface)', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: '3px', transition: 'width 0.4s ease' }} />
